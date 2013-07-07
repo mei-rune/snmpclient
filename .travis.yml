@@ -1,0 +1,6 @@
+language: go
+go: 1.1
+install:
+  - export PATH=$PATH:$HOME/gopath/bin
+script:
+  - go test github.com/runner-mei/snmpclient.go
