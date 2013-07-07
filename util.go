@@ -104,3 +104,31 @@ func (l *fmtWriter) Printf(format string, v ...interface{}) {
 func (l *fmtWriter) Print(v ...interface{}) {
 	fmt.Println(v...)
 }
+
+func ParseSnmpVersion(v string) (SnmpVersion, error) {
+	switch v {
+	case "v1", "V1", "1":
+		return SNMP_V1, nil
+	case "v2", "V2", "v2c", "V2C", "2", "2c", "2C":
+		return SNMP_V2C, nil
+	case "v3", "V3", "3":
+		return SNMP_V3, nil
+	}
+	return SNMP_Verr, errors.New("Unsupported version - " + v)
+}
+
+func ParseSnmpAction(v string) (SnmpType, error) {
+	switch v {
+	case "table", "Table", "TABLE":
+		return SNMP_PDU_TABLE, nil
+	case "get", "Get", "GET":
+		return SNMP_PDU_GET, nil
+	case "next", "Next", "NEXT", "getnext", "Getnext", "GETNEXT":
+		return SNMP_PDU_GETNEXT, nil
+	case "bulk", "Bulk", "BULK", "getbuld", "Getbuld", "GETBULD":
+		return SNMP_PDU_GETBULK, nil
+	case "set", "Set", "SET", "put", "Put", "PUT":
+		return SNMP_PDU_SET, nil
+	}
+	return SNMP_PDU_GET, fmt.Errorf("error pdu type: %s", v)
+}
