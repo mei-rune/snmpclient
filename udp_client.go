@@ -59,7 +59,7 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &fmtWriter{}, &fmtWriter{})
+	return NewSnmpClientWith(host, &nullWriter{}, &fmtWriter{})
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
