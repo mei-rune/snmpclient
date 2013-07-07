@@ -15,7 +15,14 @@ func TestUdpClientTimeout(t *testing.T) {
 	var cl Client
 	var e error
 
-	cl, e = NewSnmpClient("127.0.0.1:161")
+	in, err := net.ListenPacket("udp", ":8324")
+	if nil != err {
+		t.Errorf("listenAt ':8324' failed - %s", e.Error())
+		return
+	}
+	defer in.Close()
+
+	cl, e = NewSnmpClient("127.0.0.1:8324")
 	if nil != e {
 		t.Errorf("create snmp client failed - %s", e.Error())
 		return
