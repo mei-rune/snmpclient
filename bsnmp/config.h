@@ -47,10 +47,6 @@
 #define HAVE_INET_NTOP 1
 #endif
 
-#ifndef __unused
-#define __unused
-#endif
-
 #ifdef __GNUC__
 #define HAVE_GETTIMEOFDAY    1
 #endif
