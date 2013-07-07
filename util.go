@@ -1,6 +1,7 @@
 package snmpclient
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
