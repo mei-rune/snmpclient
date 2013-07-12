@@ -45,7 +45,7 @@ func TestV3DisconnectWhitv3Pdu(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -119,7 +119,7 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 			var pdu PDU
 
 			trapCount = count
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -229,7 +229,7 @@ func TestV3ReadOkWhitv3Pdu(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -283,7 +283,7 @@ func TestV3AuthFailureWhitv3Pdu(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -333,7 +333,7 @@ func TestV3AuthErrorFailureWhitv3Pdu(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -389,7 +389,7 @@ func TestV3PrivFailureWhitv3Pdu(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {
@@ -447,7 +447,7 @@ func TestV3AutoRedisconverWhitEngineIdTimeout(t *testing.T) {
 		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
 			var pdu PDU
 			sq_count = count
-			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+			pdu, trapError = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 			switch count {
 			case 1:
 				if 0 != pdu.GetVariableBindings().Len() {

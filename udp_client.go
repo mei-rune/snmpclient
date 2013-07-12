@@ -67,7 +67,7 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &fmtWriter{}, &fmtWriter{})
+	return NewSnmpClientWith(host, &nullWriter{}, &nullWriter{})
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
@@ -392,14 +392,11 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError), pdu *V3PDU) {
 
 	if nil != pdu.engine && nil != pdu.engine.engine_id && 0 != len(pdu.engine.engine_id) {
-		fmt.Println("not discovery engine becase pdu ")
 		client.sendV3PDU(reply, pdu, false)
 		return
 	}
 
 	if nil != client.engine.engine_id && 0 != len(client.engine.engine_id) {
-
-		fmt.Println("not discovery engine becase client")
 		if nil == pdu.engine {
 			pdu.engine = &client.engine
 		} else {
@@ -410,7 +407,6 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 	}
 
 	client.discoverEngine(func(resp PDU, err SnmpError) {
-		fmt.Println("discover engine id return")
 		if nil == resp {
 			if nil != err {
 				err = newError(err.Code(), err, "discover engine failed")

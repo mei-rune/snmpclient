@@ -2,9 +2,12 @@ package snmpclient
 
 import (
 	"encoding/hex"
+	"flag"
 	//"fmt"
 	"testing"
 )
+
+var dump_pdu = flag.Bool("test.dump_pdu", false, "dump pdu")
 
 // GET SNMPv1 '123987' request_id=234 error_status=0 error_index=0
 //  [0]: 1.2.3.4.5.1.7.8.9.10.11.12.13=NULL
@@ -201,7 +204,7 @@ func TestEncodePDU(t *testing.T) {
 	pdu := &V2CPDU{version: SNMP_V1, requestId: 234}
 	pdu.Init(map[string]string{"snmp.community": "123987"})
 	fillPdu(pdu.GetVariableBindings())
-	bytes, e := pdu.encodePDU(true)
+	bytes, e := pdu.encodePDU(*dump_pdu)
 	if nil != e {
 		t.Errorf("encode v1 pdu faile - %s", e.Error())
 	}
@@ -214,7 +217,7 @@ func TestEncodePDU(t *testing.T) {
 	pdu = &V2CPDU{version: SNMP_V2C, requestId: 234}
 	pdu.Init(map[string]string{"snmp.community": "123987"})
 	fillPdu(pdu.GetVariableBindings())
-	bytes, e = pdu.encodePDU(true)
+	bytes, e = pdu.encodePDU(*dump_pdu)
 	if nil != e {
 		t.Errorf("encode v2 pdu faile - %s", e.Error())
 	}
@@ -309,7 +312,7 @@ func testEncodeV3PDU(t *testing.T, args map[string]string, txt, msg string) {
 		// usm.localization_priv_key = usm.priv_key
 	}
 	fillPdu(pduv3.GetVariableBindings())
-	bytes, e := pduv3.encodePDU(true)
+	bytes, e := pduv3.encodePDU(*dump_pdu)
 	if nil != e {
 		t.Errorf("%sencode v3 pdu failed - %s", msg, e.Error())
 	}
@@ -326,7 +329,7 @@ func TestDecodePDU(t *testing.T) {
 		t.Errorf("decode hex failed - %s", err.Error())
 		return
 	}
-	pdu, e := DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+	pdu, e := DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 	if nil != e {
 		t.Errorf("decode v1 pdu failed - %s", e.Error())
 	} else {
@@ -348,7 +351,7 @@ func TestDecodePDU(t *testing.T) {
 		t.Errorf("decode hex failed - %s", err.Error())
 		return
 	}
-	pdu, e = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, true)
+	pdu, e = DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, *dump_pdu)
 	if nil != e {
 		t.Errorf("decode v2 pdu failed - %s", e.Error())
 	} else {
@@ -386,7 +389,7 @@ func testDecodeV3PDU(t *testing.T, txt string, auth AuthType, auth_s string, pri
 		t.Errorf(msg+"decode hex failed - %s", err.Error())
 		return
 	}
-	pdu, e := DecodePDU(bytes, priv, priv_s, true)
+	pdu, e := DecodePDU(bytes, priv, priv_s, *dump_pdu)
 	if nil != e {
 		t.Errorf(msg+"decode v3 pdu failed - %s", e.Error())
 	} else {
