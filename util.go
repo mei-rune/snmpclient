@@ -100,6 +100,7 @@ func (l *fmtWriter) IsEnabled() bool { return true }
 
 func (l *fmtWriter) Printf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
+	fmt.Println()
 }
 
 func (l *fmtWriter) Print(v ...interface{}) {

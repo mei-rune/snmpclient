@@ -5,7 +5,7 @@ package snmpclient
 // #include "bsnmp/asn1.h"
 // #include "bsnmp/snmp.h"
 // #include "bsnmp/gobindings.h"
-//  
+//
 // #cgo CFLAGS: -O0 -g3
 // #cgo windows LDFLAGS: -lws2_32
 import "C"
@@ -13,7 +13,6 @@ import "C"
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"strconv"
 	"unsafe"
 )
@@ -211,9 +210,7 @@ func (pdu *V3PDU) Init(params map[string]string) (err SnmpError) {
 			}
 		}
 	}
-	fmt.Println("====")
 	pdu.securityModel, err = NewSecurityModel(params)
-	fmt.Println("=====")
 	return
 }
 
@@ -250,13 +247,29 @@ func (pdu *V3PDU) String() string {
 	buffer.WriteString(" from ")
 	buffer.WriteString(pdu.target)
 	buffer.WriteString(" with ")
-	buffer.WriteString(pdu.securityModel.String())
+	if nil == pdu.securityModel {
+		buffer.WriteString("securityModel is nil")
+	} else {
+		buffer.WriteString(pdu.securityModel.String())
+	}
 	buffer.WriteString(" and contextName='")
 	buffer.WriteString(pdu.contextName)
-	buffer.WriteString("' and contextEngine='")
-	buffer.WriteString(hex.EncodeToString(pdu.contextEngine))
+	buffer.WriteString("' and contextEngine=")
+
+	if nil == pdu.contextEngine {
+		buffer.WriteString("nil")
+	} else {
+		buffer.WriteString("'")
+		buffer.WriteString(hex.EncodeToString(pdu.contextEngine))
+		buffer.WriteString("'")
+	}
+
 	buffer.WriteString(" and ")
-	buffer.WriteString(pdu.securityModel.String())
+	if nil == pdu.securityModel {
+		buffer.WriteString("securityModel is nil")
+	} else {
+		buffer.WriteString(pdu.securityModel.String())
+	}
 	buffer.WriteString(" and requestId='")
 	buffer.WriteString(strconv.Itoa(pdu.GetRequestID()))
 	buffer.WriteString(". and identifier='")
@@ -269,7 +282,6 @@ func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	var internal C.snmp_pdu_t
 	C.snmp_pdu_init(&internal)
 	defer C.snmp_pdu_free(&internal)
-
 	internal.request_id = C.int32_t(pdu.requestId)
 	internal.pdu_type = C.u_int(pdu.op)
 	internal.version = uint32(SNMP_V3)
@@ -281,13 +293,17 @@ func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	}
 	internal.flags = 0
 
-	err := memcpy(&internal.context_engine[0], SNMP_ENGINE_ID_LEN, pdu.contextEngine)
-	if nil != err {
-		return nil, newError(SNMP_CODE_FAILED, err, "copy context_engine failed")
+	if nil == pdu.contextEngine {
+		internal.context_engine_len = C.uint32_t(0)
+	} else {
+		err := memcpy(&internal.context_engine[0], SNMP_ENGINE_ID_LEN, pdu.contextEngine)
+		if nil != err {
+			return nil, newError(SNMP_CODE_FAILED, err, "copy context_engine failed")
+		}
+		internal.context_engine_len = C.uint32_t(len(pdu.contextEngine))
 	}
-	internal.context_engine_len = C.uint32_t(len(pdu.contextEngine))
 
-	err = strcpy(&internal.context_name[0], SNMP_CONTEXT_NAME_LEN, pdu.contextName)
+	err := strcpy(&internal.context_name[0], SNMP_CONTEXT_NAME_LEN, pdu.contextName)
 	if nil != err {
 		return nil, newError(SNMP_CODE_FAILED, err, "copy context_name failed")
 	}
@@ -308,6 +324,9 @@ func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	internal.engine.max_msg_size = C.int32_t(pdu.maxMsgSize)
 
 	internal.security_model = SNMP_SECMODEL_USM
+	if nil == pdu.securityModel {
+		return nil, newError(SNMP_CODE_FAILED, nil, "security model is nil")
+	}
 	err = pdu.securityModel.Write(&internal.user)
 
 	if nil != err {

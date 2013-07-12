@@ -41,6 +41,14 @@ func (req *pendingRequest) reply(result PDU, err SnmpError) {
 		}
 	}
 
+	if nil == req {
+		panic("req is nil")
+	}
+
+	if nil == req.callback {
+		panic("callback is nil")
+	}
+
 	req.callback(result, err)
 }
 
@@ -59,7 +67,7 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &nullWriter{}, &fmtWriter{})
+	return NewSnmpClientWith(host, &fmtWriter{}, &fmtWriter{})
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
@@ -187,7 +195,6 @@ type client_request struct {
 
 func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func(pdu PDU, e SnmpError))) (PDU, SnmpError) {
 	c := make(chan *client_request)
-	defer close(c)
 
 	client.c <- func() {
 
@@ -196,8 +203,10 @@ func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func
 			if is_reply {
 				return
 			}
+
 			is_reply = true
 			c <- &client_request{pdu: pdu, e: e}
+			close(c)
 		}
 
 		defer func() {
@@ -323,12 +332,22 @@ func (client *UdpClient) createConnect() SnmpError {
 }
 
 func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
+
+	if client.DEBUG.IsEnabled() {
+		client.DEBUG.Printf("snmp - discover snmp engine")
+	}
+
 	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
 	pdu := &V3PDU{op: SNMP_PDU_GET, target: client.host, securityModel: usm}
 	client.sendPdu(pdu, fn)
 }
 
 func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU, autoDiscoverEngine bool) {
+	if nil == pdu.securityModel {
+		reply(nil, Error(SNMP_CODE_FAILED, "securityModel is nil"))
+		return
+	}
+
 	if !pdu.securityModel.IsLocalize() {
 		if nil == pdu.engine {
 			if client.DEBUG.IsEnabled() {
@@ -339,6 +358,7 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 		}
 		pdu.securityModel.Localize(pdu.engine.engine_id)
 	}
+
 	if autoDiscoverEngine {
 		client.sendPdu(pdu, func(resp PDU, err SnmpError) {
 			if nil != err {
@@ -356,9 +376,9 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 
 			if client.DEBUG.IsEnabled() {
 				if nil != err {
-					client.DEBUG.Printf("snmp - recv pdu failed, %v", err)
+					client.DEBUG.Printf("[snmpv3] - recv pdu failed, %v", err)
 				} else {
-					client.DEBUG.Printf("snmp - recv pdu success, %v", resp)
+					client.DEBUG.Printf("[snmpv3] - recv pdu success, %v", resp)
 				}
 			}
 
@@ -372,12 +392,14 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError), pdu *V3PDU) {
 
 	if nil != pdu.engine && nil != pdu.engine.engine_id && 0 != len(pdu.engine.engine_id) {
+		fmt.Println("not discovery engine becase pdu ")
 		client.sendV3PDU(reply, pdu, false)
 		return
 	}
 
 	if nil != client.engine.engine_id && 0 != len(client.engine.engine_id) {
 
+		fmt.Println("not discovery engine becase client")
 		if nil == pdu.engine {
 			pdu.engine = &client.engine
 		} else {
@@ -388,8 +410,8 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 	}
 
 	client.discoverEngine(func(resp PDU, err SnmpError) {
+		fmt.Println("discover engine id return")
 		if nil == resp {
-
 			if nil != err {
 				err = newError(err.Code(), err, "discover engine failed")
 			} else {
@@ -425,6 +447,7 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 		} else {
 			pdu.engine.engine_id = client.engine.engine_id
 		}
+
 		client.sendV3PDU(reply, pdu, false)
 	})
 }
@@ -503,7 +526,10 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 
 		req, ok = client.pendings[int(pdu.identifier)]
 		if !ok {
-			client.ERROR.Printf("not found request with requestId = %d.\r\n", int(pdu.identifier))
+			client.ERROR.Printf("not found request with requestId = %d, %d.\r\n", int(pdu.identifier), int(pdu.request_id))
+			for i, _ := range client.pendings {
+				client.ERROR.Print(i)
+			}
 			return
 		}
 		delete(client.pendings, int(pdu.identifier))

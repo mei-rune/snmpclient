@@ -66,13 +66,14 @@ func startServer2(laddr string) (*snmpTestServer, error) {
 }
 
 func stopServer2(svr *snmpTestServer) {
-	svr.conn.Close()
+	if nil != svr.conn {
+		svr.conn.Close()
+	}
 }
 
 func serveTestUdp2(svr *snmpTestServer) {
 
 	defer func() {
-
 		svr.conn = nil
 		svr.waitGroup.Done()
 	}()
@@ -155,11 +156,11 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 // 2012/11/16 11:37:46 snmp - read ok
 // 2012/11/16 11:37:46 306f020103300e020104020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022c8704046d666b31040c653dde6ad603d9ce5587dd1f0400302c040a80001f880468617a656c0400a21c0201040201000201003011300f06082b060102010103004303116531
 // GET SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -167,11 +168,11 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  engine boots=0, time=0, max_msg_size=10000, engine.engine_id:  0:
 //  request_id=1 error_status=0 error_index=0
 // REPORT SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -180,7 +181,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=1 error_status=0 error_index=0
 //  [0]: 1.3.6.1.6.3.15.1.1.4.0=COUNTER 9
 // GETNEXT SNMPv3 '' identifier: 2
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -193,7 +194,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=2 error_status=0 error_index=0
 //  [0]: 1.3.6=NULL
 // RESPONSE SNMPv3 '' identifier: 2
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 40 36 5e be 8c 88 f4 ab 6b 1a 22 03
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -206,7 +207,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=2 error_status=0 error_index=0
 //  [0]: 1.3.6.1.2.1.1.1.0=OCTET STRING 102: 57 69 6e 64 6f 77 73 20 48 61 7a 65 6c 20 36 2e 30 2e 36 30 30 32 20 53 65 72 76 69 63 65 20 50 61 63 6b 20 32 20 20 53 65 72 76 65 72 20 34 2e 30 2c 20 45 6e 74 65 72 70 72 69 73 65 20 45 64 69 74 69 6f 6e 20 78 38 36 20 46 61 6d 69 6c 79 20 36 20 4d 6f 64 65 6c 20 32 33 20 53 74 65 70 70 69 6e 67 20 36
 // GETNEXT SNMPv3 '' identifier: 3
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -219,7 +220,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=3 error_status=0 error_index=0
 //  [0]: 1.3.6.1.2.1.1.1.0=NULL
 // RESPONSE SNMPv3 '' identifier: 3
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 1a cc d5 d5 e9 b5 c9 9b d8 b9 b8 9c
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -232,7 +233,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=3 error_status=0 error_index=0
 //  [0]: 1.3.6.1.2.1.1.2.0=OID 1.3.6.1.4.1.8072.3.2.13
 // GETNEXT SNMPv3 '' identifier: 4
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -245,7 +246,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  request_id=4 error_status=0 error_index=0
 //  [0]: 1.3.6.1.2.1.1.2.0=NULL
 // RESPONSE SNMPv3 '' identifier: 4
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 65 3d de 6a d6 03 d9 ce 55 87 dd 1f
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -254,8 +255,8 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 //  user.auth_key 16: d8 62 0
 // 2012/11/16 11:37:46 snmp - recv pdu success, response variableBindings[1.3.6.1.2.1.1.3.0='1140017'] from  with auth = '[md5]' and priv = '[nopriv]' and contextName='' and contextEngine='80001f880468617a656c and auth = '[md5]' and priv = '[nopriv]' and requestId='4. and identifier='4' and version='v3'
 const (
-	discover_response_pdu = "3081d3020103300e020102020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022c8704046d666b31040c40365ebe8c88f4ab6b1a2203040030818f040a80001f880468617a656c0400a27f0201020201000201003074307206082b06010201010100046657696e646f77732048617a656c20362e302e363030322053657276696365205061636b2032202053657276657220342e302c20456e74657270726973652045646974696f6e207838362046616d696c792036204d6f64656c203233205374657070696e672036"
-	read_v3_response_pdu  = "3076020103300e020103020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022c8704046d666b31040c1accd5d5e9b5c99bd8b9b89c04003033040a80001f880468617a656c0400a2230201030201000201003018301606082b06010201010200060a2b06010401bf0803020d"
+	discover_response_pdu = "305f020103300e020101020300ffe3040100020103041c301a040a80001f880468617a656c0202010a02022c87040004000400302c040a80001f880468617a656c0400a81c0201010201000201003011300f060a2b060106030f01010400410109"
+	read_v3_response_pdu  = "3081d3020103300e020102020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022c8704046d666b31040c40365ebe8c88f4ab6b1a2203040030818f040a80001f880468617a656c0400a27f0201020201000201003074307206082b06010201010100046657696e646f77732048617a656c20362e302e363030322053657276696365205061636b2032202053657276657220342e302c20456e74657270726973652045646974696f6e207838362046616d696c792036204d6f64656c203233205374657070696e672036"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,11 +272,11 @@ const (
 // 2012/11/16 11:36:27 snmp - recv pdu failed, bad security level
 // 2012/11/16 11:36:27 snmp - invoke end.
 // GET SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -283,11 +284,11 @@ const (
 //  engine boots=0, time=0, max_msg_size=10000, engine.engine_id:  0:
 //  request_id=1 error_status=0 error_index=0
 // REPORT SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -296,7 +297,7 @@ const (
 //  request_id=1 error_status=0 error_index=0
 //  [0]: 1.3.6.1.6.3.15.1.1.4.0=COUNTER 8
 // GETNEXT SNMPv3 '' identifier: 2
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -312,6 +313,9 @@ const (
 const (
 	auth_failed_discover_response_pdu = "305f020103300e020101020300ffe3040100020103041c301a040a80001f880468617a656c0202010a02022c38040004000400302c040a80001f880468617a656c0400a81c0201010201000201003011300f060a2b060106030f01010400410108"
 	auth_failed_read_v3_response_pdu  = "3063020103300e020102020300ffe30401000201030420301e040a80001f880468617a656c0202010a02022c3804046d666b3104000400302c040a80001f880468617a656c0400a81c0201020201000201003011300f060a2b060106030f01010500410104"
+
+	auth_error_discover_response_pdu = "305f020103300e020101020300ffe3040100020103041c301a040a80001f880468617a656c0202010a02022cbc040004000400302c040a80001f880468617a656c0400a81c0201010201000201003011300f060a2b060106030f0101040041010a"
+	auth_error_read_v3_response_pdu  = "3066020103300e020102020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022cbc04046d666b33040c24d282b0859eaa16fed6045f04003023040a80001f880468617a656c0400a2130201020201100201003008300606022b060500"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,11 +330,11 @@ const (
 // 2012/11/16 11:38:38 snmp - recv pdu failed, check pdu failed, Authorization error
 // 2012/11/16 11:38:38 snmp - invoke end.
 // GET SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -338,11 +342,11 @@ const (
 //  engine boots=0, time=0, max_msg_size=10000, engine.engine_id:  0:
 //  request_id=1 error_status=0 error_index=0
 // REPORT SNMPv3 '' identifier: 1
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
-//  user.secname: 
+//  user.secname:
 //  user.auth_proto: 0
 //  user.auth_key 0:
 //  user.priv_proto: 0
@@ -351,7 +355,7 @@ const (
 //  request_id=1 error_status=0 error_index=0
 //  [0]: 1.3.6.1.6.3.15.1.1.4.0=COUNTER 10
 // GETNEXT SNMPv3 '' identifier: 2
-//  context_name: 
+//  context_name:
 //  context_engine 0:
 //  msg_digest 12: 00 00 00 00 00 00 00 00 00 00 00 00
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -364,7 +368,7 @@ const (
 //  request_id=2 error_status=0 error_index=0
 //  [0]: 1.3.6=NULL
 // RESPONSE SNMPv3 '' identifier: 2
-//  context_name: 
+//  context_name:
 //  context_engine 10: 80 00 1f 88 04 68 61 7a 65 6c
 //  msg_digest 12: 24 d2 82 b0 85 9e aa 16 fe d6 04 5f
 //  msg_salt 8: 00 00 00 00 00 00 00 00
@@ -378,7 +382,7 @@ const (
 //  [0]: 1.3.6=NULL
 const (
 	priv_failed_discover_response_pdu = "305f020103300e020101020300ffe3040100020103041c301a040a80001f880468617a656c0202010a02022cbc040004000400302c040a80001f880468617a656c0400a81c0201010201000201003011300f060a2b060106030f0101040041010a"
-	priv_failed_read_v3_response_pdu  = "3066020103300e020102020300ffe3040101020103042c302a040a80001f880468617a656c0202010a02022cbc04046d666b33040c24d282b0859eaa16fed6045f04003023040a80001f880468617a656c0400a2130201020201100201003008300606022b060500"
+	priv_failed_read_v3_response_pdu  = "3063020103300e020102020300ffe30401000201030420301e040a80001f880468617a656c020201a10202150004046d666b3204000400302c040a80001f880468617a656c0400a81c0201000201000201003011300f060a2b060106030f01010600410104"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
