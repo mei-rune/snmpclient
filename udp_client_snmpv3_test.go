@@ -36,7 +36,6 @@ func TestV3SendV3Failed(t *testing.T) {
 }
 
 func TestV3DisconnectWhitv3Pdu(t *testing.T) {
-	t.Skip("next")
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
 		var trapError SnmpError
 		var res, req PDU
@@ -94,8 +93,8 @@ func TestV3DisconnectWhitv3Pdu(t *testing.T) {
 		req.Init(map[string]string{"snmp.secmodel": "usm", "snmp.secname": "mfk1", "snmp.auth_pass": "[md5]mfk123456"})
 
 		res, err = cl.SendAndRecv(req, 2*time.Second)
-		if nil != err {
-			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
+		if nil == err {
+			t.Errorf("excepted error is not nil, but actual is nil")
 			return
 		}
 
