@@ -98,8 +98,8 @@ func TestV3DisconnectWhitv3Pdu(t *testing.T) {
 			return
 		}
 
-		if !strings.Contains(err.Error(), "time out") {
-			t.Errorf("except throw an timeout error, actual return %s", err.Error())
+		if !strings.Contains(err.Error(), "127.0.0.1:") {
+			t.Errorf("except throw an send error, actual return %s", err.Error())
 			return
 		}
 		//cl.FreePDU(pdu, res)
@@ -107,7 +107,6 @@ func TestV3DisconnectWhitv3Pdu(t *testing.T) {
 }
 
 func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
-	t.Skip("next")
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
 		var trapError SnmpError
 		var res, req PDU
@@ -131,17 +130,17 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 					trapError = Error(SNMP_CODE_FAILED, "engine id is error.")
 				}
 				svr.ReturnWith(read_v3_response_pdu)
+			// case 3:
+			// 	if 0 != pdu.GetVariableBindings().Len() {
+			// 		trapError = Error(SNMP_CODE_FAILED, "bindings len is not zero.")
+			// 	}
+			// 	svr.ReturnWith(discover_response_pdu)
 			case 3:
-				if 0 != pdu.GetVariableBindings().Len() {
-					trapError = Error(SNMP_CODE_FAILED, "bindings len is not zero.")
-				}
-				svr.ReturnWith(discover_response_pdu)
-			case 4:
 				//boots=266, time=11399, max_msg_size=65507, engine.engine_id:  10: 80 00 1f 88 04 68 61 7a 65 6c
 				if "80001f880468617a656c" != hex.EncodeToString(pdu.(*V3PDU).engine.engine_id) {
 					trapError = Error(SNMP_CODE_FAILED, "engine id is error.")
 				}
-				svr.ReturnWith(read_v3_response_pdu)
+				svr.ReturnWith(read_v3_response_pdu_request_id_4)
 			}
 		})
 
@@ -179,13 +178,13 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 		req.Init(map[string]string{"snmp.secmodel": "usm", "snmp.secname": "mfk1", "snmp.auth_pass": "[md5]mfk123456"})
 
 		res, err = cl.SendAndRecv(req, 2*time.Second)
-		if nil != err {
-			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
+		if nil == err {
+			t.Errorf("excepted error is not nil, but actual is nil")
 			return
 		}
 
-		if !strings.Contains(err.Error(), "time out") {
-			t.Errorf("except throw an timeout error, actual return %s", err.Error())
+		if !strings.Contains(err.Error(), "127.0.0.1:") {
+			t.Errorf("except throw an send error, actual return %s", err.Error())
 			return
 		}
 
@@ -198,14 +197,10 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 		}
 		req.Init(map[string]string{"snmp.secmodel": "usm", "snmp.secname": "mfk1", "snmp.auth_pass": "[md5]mfk123456"})
 
+		fmt.Println("SendAndRecv")
 		res, err = cl.SendAndRecv(req, 2*time.Second)
 		if nil != err {
 			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
-			return
-		}
-
-		if !strings.Contains(err.Error(), "time out") {
-			t.Errorf("except throw an timeout error, actual return %s", err.Error())
 			return
 		}
 
@@ -213,7 +208,7 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 			t.Errorf("sendAndRecv pdu failed - res is error")
 		}
 
-		if 4 != trapCount {
+		if 3 != trapCount {
 			t.Errorf("sendAndRecv trap count failed")
 			return
 		}

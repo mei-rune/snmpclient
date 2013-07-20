@@ -67,7 +67,7 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &nullWriter{}, &nullWriter{})
+	return NewSnmpClientWith(host, &fmtWriter{}, &fmtWriter{})
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
@@ -501,7 +501,6 @@ func (client *UdpClient) onDisconnection(err error) {
 }
 
 func (client *UdpClient) handleRecv(bytes []byte) {
-
 	var buffer C.asn_buf_t
 	var pdu C.snmp_pdu_t
 	var result PDU
