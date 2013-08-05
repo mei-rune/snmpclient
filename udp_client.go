@@ -273,7 +273,7 @@ func (client *UdpClient) Stats() string {
 func (client *UdpClient) Test() error {
 	return client.returnError(1*time.Minute, func() error {
 		if time.Now().After(client.lastActive.Add(time.Duration(*deadTimeout) * time.Minute)) {
-			return errors.New("time out")
+			return errors.New("it is expired.")
 		}
 		return nil
 	})
