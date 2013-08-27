@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"net/http"
-	_ "net/http/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -269,7 +267,6 @@ var get_bulk_request_pdu = `303402010104067075626c6963a527020101020100020101301c
 var get_bulk_response_pdu = `303d02010104067075626c6963a2300201010201000201003025301206082b0601020101050004066d65692d7063300f06082b060102010106000403616161`
 
 func TestPduGetBulk(t *testing.T) {
-	go http.ListenAndServe(":4545", nil)
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
 		var trapError SnmpError
 		var res, req PDU
