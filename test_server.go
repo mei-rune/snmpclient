@@ -74,7 +74,6 @@ func stopServer2(svr *snmpTestServer) {
 }
 
 func serveTestUdp2(svr *snmpTestServer) {
-
 	defer func() {
 		svr.conn = nil
 		svr.waitGroup.Done()

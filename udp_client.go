@@ -197,7 +197,6 @@ func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func
 	c := make(chan *client_request)
 
 	client.c <- func() {
-
 		is_reply := false
 		reply := func(pdu PDU, e SnmpError) {
 			if is_reply {
@@ -227,10 +226,13 @@ func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func
 		cb(reply)
 	}
 
+	//fmt.Println("TIMEOUT", timeout)
 	select {
 	case res := <-c:
+		//fmt.Println("TIMEOUT1", timeout)
 		return res.pdu, res.e
 	case <-time.After(timeout):
+		//fmt.Println("TIMEOUT2", timeout)
 		return nil, newError(SNMP_CODE_TIMEOUT, TimeoutError, "")
 	}
 }
@@ -301,6 +303,9 @@ func toSnmpCodeError(e error) SnmpError {
 }
 
 func (client *UdpClient) SendAndRecv(req PDU, timeout time.Duration) (pdu PDU, err SnmpError) {
+	if timeout > 1*time.Minute {
+		timeout = 1 * time.Minute
+	}
 	pdu, err = client.returnPDU(timeout, func(reply func(pdu PDU, e SnmpError)) {
 		client.handleSend(reply, req)
 	})
@@ -668,6 +673,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback func(PDU, SnmpError)) {
 
 	if client.DEBUG.IsEnabled() {
 		client.DEBUG.Print("snmp - send success, " + pdu.String())
+		client.DEBUG.Print(hex.EncodeToString(bytes))
 	}
 
 	return

@@ -251,11 +251,16 @@ func (vbs *VariableBindings) String() string {
 	if nil != vbs.values {
 		for _, vb := range vbs.values {
 			buffer.WriteString(vb.Oid.GetString())
-			buffer.WriteString("='")
-			buffer.WriteString(vb.Value.GetString())
-			buffer.WriteString("'")
+			if nil == vb.Value {
+				buffer.WriteString("=nil,")
+			} else {
+				buffer.WriteString("='")
+				buffer.WriteString(vb.Value.GetString())
+				buffer.WriteString("',")
+			}
 		}
 	}
+	buffer.Truncate(buffer.Len() - 1)
 	buffer.WriteString("]")
 	return buffer.String()
 }

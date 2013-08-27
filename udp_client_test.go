@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -248,4 +250,75 @@ func testWith(t *testing.T, laddr, caddr, pdu_txt string, f callback) {
 
 	f(t, cl, addr)
 
+}
+
+// GETBULK SNMPv2c 'public' request_id=1 error_status=0 error_index=1
+//  [0]: 1.3.6.1.2.1.1.4.0=NULL
+//  [1]: 1.3.6.1.2.1.1.5.0=NULL
+// snmp - send success, getbulk variableBindings[1.3.6.1.2.1.1.4.0=''1.3.6.1.2.1.1.5.0=''] from 127.0.0.1:161 with communit
+// y = 'public' and requestId='1' and version='v2c' and max_repetitions='0' and non_repeaters='0'
+// 303402010104067075626c6963a527020101020100020101301c300c06082b060102010104000500300c06082b060102010105000500
+// snmp - read ok
+// 303d02010104067075626c6963a2300201010201000201003025301206082b0601020101050004066d65692d7063300f06082b060102010106000403616161
+// RESPONSE SNMPv2c 'public' request_id=1 error_status=0 error_index=0
+//  [0]: 1.3.6.1.2.1.1.5.0=OCTET STRING 6: 6d 65 69 2d 70 63
+//  [1]: 1.3.6.1.2.1.1.6.0=OCTET STRING 3: 61 61 61
+// [snmp] - recv pdu success, response variableBindings[1.3.6.1.2.1.1.5.0='6d65692d7063'1.3.6.1.2.1.1.6.0='616161'] from  w
+// ith community = 'public' and requestId='1' and version='v2c'
+var get_bulk_request_pdu = `303402010104067075626c6963a527020101020100020101301c300c06082b060102010104000500300c06082b060102010105000500`
+var get_bulk_response_pdu = `303d02010104067075626c6963a2300201010201000201003025301206082b0601020101050004066d65692d7063300f06082b060102010106000403616161`
+
+func TestPduGetBulk(t *testing.T) {
+	go http.ListenAndServe(":4545", nil)
+	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
+		var trapError SnmpError
+		var res, req PDU
+		var err error
+
+		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
+			switch count {
+			case 1:
+				if get_bulk_request_pdu != hex.EncodeToString(bytes) {
+					trapError = Error(SNMP_CODE_FAILED, "request is error.")
+				}
+				svr.ReturnWith(get_bulk_response_pdu)
+			default:
+				trapError = Error(SNMP_CODE_FAILED, "count is not 1.")
+			}
+		})
+
+		req, err = cl.CreatePDU(SNMP_PDU_GETBULK, SNMP_V2C)
+		if nil != err {
+			fmt.Printf("create pdu failed - %s\r\n", err.Error())
+			t.Errorf("create pdu failed - %s", err.Error())
+			return
+		}
+		req.Init(map[string]string{"snmp.community": "public"})
+		req.GetVariableBindings().AppendWith(SnmpOid{1, 3, 6, 1, 2, 1, 1, 4, 0}, nil)
+		req.GetVariableBindings().AppendWith(SnmpOid{1, 3, 6, 1, 2, 1, 1, 5, 0}, nil)
+
+		res, err = cl.SendAndRecv(req, 10*time.Second)
+		if nil != err {
+			fmt.Printf("sendAndRecv pdu failed - %s\r\n", err.Error())
+			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
+			return
+		}
+
+		if nil != trapError {
+			t.Errorf("sendAndRecv trap failed - %s", trapError.Error())
+			return
+		}
+
+		for _, oid1 := range []string{"1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"} {
+			found := false
+			for _, oid2 := range res.GetVariableBindings().All() {
+				if oid1 == oid2.Oid.GetString() {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("excepted oid is", oid1, "actual is ", res.GetVariableBindings().All())
+			}
+		}
+	})
 }

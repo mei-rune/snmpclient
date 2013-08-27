@@ -34,10 +34,14 @@ type V2CPDU struct {
 	community        string
 	variableBindings VariableBindings
 	maxMsgSize       uint
+
+	max_repetitions int
+	non_repeaters   int
 }
 
 func (pdu *V2CPDU) Init(params map[string]string) SnmpError {
-
+	pdu.max_repetitions = 0
+	pdu.non_repeaters = 0
 	pdu.maxMsgSize = *maxPDUSize
 	if v, ok := params["snmp.max_msg_size"]; ok {
 		if num, e := strconv.ParseUint(v, 10, 0); nil == e {
@@ -90,6 +94,12 @@ func (pdu *V2CPDU) String() string {
 	buffer.WriteString(strconv.Itoa(pdu.GetRequestID()))
 	buffer.WriteString("' and version='")
 	buffer.WriteString(pdu.version.String())
+	if SNMP_PDU_GETBULK == pdu.op {
+		buffer.WriteString("' and max_repetitions='")
+		buffer.WriteString(strconv.Itoa(pdu.max_repetitions))
+		buffer.WriteString("' and non_repeaters='")
+		buffer.WriteString(strconv.Itoa(pdu.non_repeaters))
+	}
 	buffer.WriteString("'")
 	return buffer.String()
 }
@@ -98,6 +108,20 @@ func (pdu *V2CPDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	var internal C.snmp_pdu_t
 	C.snmp_pdu_init(&internal)
 	defer C.snmp_pdu_free(&internal)
+
+	if SNMP_PDU_GETBULK == pdu.op {
+		if pdu.variableBindings.Len() < pdu.non_repeaters {
+			internal.error_status = C.int32_t(pdu.variableBindings.Len())
+		} else {
+			internal.error_status = C.int32_t(pdu.non_repeaters)
+		}
+
+		if pdu.max_repetitions > 0 {
+			internal.error_index = C.int32_t(pdu.max_repetitions)
+		} else {
+			internal.error_index = C.int32_t(1)
+		}
+	}
 
 	err := strcpy(&internal.community[0], MAX_COMMUNITY_LEN, pdu.community)
 	if nil != err {
@@ -159,11 +183,16 @@ type V3PDU struct {
 	contextName      string
 	contextEngine    []byte
 	engine           *snmpEngine
+
+	max_repetitions int
+	non_repeaters   int
 }
 
 func (pdu *V3PDU) Init(params map[string]string) (err SnmpError) {
 	var e error
 
+	pdu.max_repetitions = 0
+	pdu.non_repeaters = 0
 	pdu.maxMsgSize = *maxPDUSize
 
 	if v, ok := params["snmp.max_msg_size"]; ok {
@@ -275,6 +304,12 @@ func (pdu *V3PDU) String() string {
 	buffer.WriteString(". and identifier='")
 	buffer.WriteString(strconv.Itoa(pdu.identifier))
 	buffer.WriteString("' and version='v3'")
+	if SNMP_PDU_GETBULK == pdu.op {
+		buffer.WriteString("' and max_repetitions='")
+		buffer.WriteString(strconv.Itoa(pdu.max_repetitions))
+		buffer.WriteString("' and non_repeaters='")
+		buffer.WriteString(strconv.Itoa(pdu.non_repeaters))
+	}
 	return buffer.String()
 }
 
@@ -285,6 +320,20 @@ func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	internal.request_id = C.int32_t(pdu.requestId)
 	internal.pdu_type = C.u_int(pdu.op)
 	internal.version = uint32(SNMP_V3)
+
+	if SNMP_PDU_GETBULK == pdu.op {
+		if pdu.variableBindings.Len() < pdu.non_repeaters {
+			internal.error_status = C.int32_t(pdu.variableBindings.Len())
+		} else {
+			internal.error_status = C.int32_t(pdu.non_repeaters)
+		}
+
+		if pdu.max_repetitions > 0 {
+			internal.error_index = C.int32_t(pdu.max_repetitions)
+		} else {
+			internal.error_index = C.int32_t(1)
+		}
+	}
 
 	if pdu.identifier < 0 {
 		internal.identifier = C.int32_t(pdu.requestId)
