@@ -40,12 +40,23 @@ type V2CPDU struct {
 }
 
 func (pdu *V2CPDU) Init(params map[string]string) SnmpError {
-	pdu.max_repetitions = 0
-	pdu.non_repeaters = 0
+
 	pdu.maxMsgSize = *maxPDUSize
 	if v, ok := params["snmp.max_msg_size"]; ok {
 		if num, e := strconv.ParseUint(v, 10, 0); nil == e {
 			pdu.maxMsgSize = uint(num)
+		}
+	}
+
+	if v, ok := params["snmp.max_repetitions"]; ok {
+		if num, e := strconv.ParseInt(v, 10, 0); nil == e {
+			pdu.max_repetitions = int(num)
+		}
+	}
+
+	if v, ok := params["snmp.non_repeaters"]; ok {
+		if num, e := strconv.ParseInt(v, 10, 0); nil == e {
+			pdu.non_repeaters = int(num)
 		}
 	}
 
@@ -191,13 +202,23 @@ type V3PDU struct {
 func (pdu *V3PDU) Init(params map[string]string) (err SnmpError) {
 	var e error
 
-	pdu.max_repetitions = 0
-	pdu.non_repeaters = 0
 	pdu.maxMsgSize = *maxPDUSize
 
 	if v, ok := params["snmp.max_msg_size"]; ok {
 		if num, e := strconv.ParseUint(v, 10, 0); nil == e {
 			pdu.maxMsgSize = uint(num)
+		}
+	}
+
+	if v, ok := params["snmp.max_repetitions"]; ok {
+		if num, e := strconv.ParseInt(v, 10, 0); nil == e {
+			pdu.max_repetitions = int(num)
+		}
+	}
+
+	if v, ok := params["snmp.non_repeaters"]; ok {
+		if num, e := strconv.ParseInt(v, 10, 0); nil == e {
+			pdu.non_repeaters = int(num)
 		}
 	}
 
