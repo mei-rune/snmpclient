@@ -182,6 +182,25 @@ type SnmpError interface {
 	Code() SnmpResult
 }
 
+var (
+	ERROR_NOSUCHOBJECT   error = Error(SNMP_CODE_SYNTAX_NOSUCHOBJECT, "nosuchobject")
+	ERROR_NOSUCHINSTANCE error = Error(SNMP_CODE_SYNTAX_NOSUCHINSTANCE, "nosuchinstance")
+	ERROR_ENDOFMIBVIEW   error = Error(SNMP_CODE_SYNTAX_ENDOFMIBVIEW, "endofmibview")
+)
+
+func ToError(v SnmpValue) error {
+	switch v.GetSyntax() {
+	case SNMP_SYNTAX_NOSUCHOBJECT:
+		return ERROR_NOSUCHOBJECT
+	case SNMP_SYNTAX_NOSUCHINSTANCE:
+		return ERROR_NOSUCHINSTANCE
+	case SNMP_SYNTAX_ENDOFMIBVIEW:
+		return ERROR_ENDOFMIBVIEW
+	default:
+		return Error(SNMP_CODE_SYNTAX_MISMATCH, "unknow_snmp_sytax -- "+v.String())
+	}
+}
+
 ///////////////////////// VariableBindings ///////////////////////////////////
 type VariableBinding struct {
 	Oid   SnmpOid

@@ -23,11 +23,13 @@ import (
 var TimeoutError = errors.New("time out")
 
 type PingResult struct {
+	Id             int
 	Addr           net.Addr
 	Version        SnmpVersion
 	Community      string
 	SecurityParams map[string]string
 	Error          error
+	Timestamp      time.Time
 }
 
 type internal_pinger struct {
@@ -90,27 +92,30 @@ func (self *internal_pinger) GetChannel() <-chan *PingResult {
 var emptyParams = map[string]string{}
 
 func (self *internal_pinger) Send(raddr string) error {
-	return self.send(raddr, self.version, self.community, self.securityParams)
+	return self.SendPdu(0, raddr, self.version, self.community, self.securityParams)
 }
 
-func (self *internal_pinger) send(raddr string, version SnmpVersion, community string, securityParams map[string]string) error {
+func (self *internal_pinger) SendPdu(id int, raddr string, version SnmpVersion, community string, securityParams map[string]string) error {
 	ra, err := net.ResolveUDPAddr(self.network, raddr)
 	if err != nil {
 		return fmt.Errorf("ResolveIPAddr(%q, %q) failed: %v", self.network, raddr, err)
 	}
-	self.id++
+	if 0 == id {
+		self.id++
+		id = self.id
+	}
 
 	var pdu PDU = nil
 	switch version {
 	case SNMP_V1, SNMP_V2C:
-		pdu = &V2CPDU{op: SNMP_PDU_GET, version: version, requestId: self.id, target: raddr, community: community}
+		pdu = &V2CPDU{op: SNMP_PDU_GET, version: version, requestId: id, target: raddr, community: community}
 		pdu.Init(emptyParams)
 		err = pdu.GetVariableBindings().Append("1.3.6.1.2.1.1.2.0", "")
 		if err != nil {
 			return fmt.Errorf("AppendVariableBinding failed: %v", err)
 		}
 	case SNMP_V3:
-		pdu = &V3PDU{op: SNMP_PDU_GET, requestId: self.id, identifier: self.id, target: raddr,
+		pdu = &V3PDU{op: SNMP_PDU_GET, requestId: id, identifier: id, target: raddr,
 			securityModel: &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}}
 		pdu.Init(emptyParams)
 	default:
@@ -170,15 +175,32 @@ func (self *internal_pinger) serve() {
 			continue
 		}
 		ver := SNMP_Verr
+		id := 0
+		//community := ""
 		switch pdu.version {
 		case uint32(SNMP_V3):
 			ver = SNMP_V3
+			id = int(pdu.identifier)
 		case uint32(SNMP_V2C):
 			ver = SNMP_V2C
+			err = DecodePDUBody(&buffer, &pdu)
+			if nil == err {
+				id = int(pdu.request_id)
+			}
+			//community = C.GoString(pdu.community)
 		case uint32(SNMP_V1):
 			ver = SNMP_V1
+			err = DecodePDUBody(&buffer, &pdu)
+			if nil == err {
+				id = int(pdu.request_id)
+			}
+			//community = C.GoString(pdu.community)
 		}
-		self.ch <- &PingResult{Addr: ra, Version: ver, Community: self.community, SecurityParams: self.securityParams}
+		// if 0 == len(community) {
+		// 	community = self.community
+		// }
+
+		self.ch <- &PingResult{Id: id, Addr: ra, Version: ver, Community: self.community, SecurityParams: self.securityParams, Timestamp: time.Now()}
 		C.snmp_pdu_free(&pdu)
 	}
 }
@@ -268,12 +290,12 @@ func (self *Pinger) GetChannel() <-chan *PingResult {
 	return self.ch
 }
 
-func (self *Pinger) Send(raddr string, version SnmpVersion, community string) error {
-	return self.internal.send(raddr, version, community, nil)
+func (self *Pinger) Send(id int, raddr string, version SnmpVersion, community string) error {
+	return self.internal.SendPdu(id, raddr, version, community, nil)
 }
 
-func (self *Pinger) SendV3(raddr string, securityParams map[string]string) error {
-	return self.internal.send(raddr, SNMP_V3, "", securityParams)
+func (self *Pinger) SendV3(id int, raddr string, securityParams map[string]string) error {
+	return self.internal.SendPdu(id, raddr, SNMP_V3, "", securityParams)
 }
 
 func (self *Pinger) Recv(timeout time.Duration) (net.Addr, SnmpVersion, error) {
