@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/runner-mei/snmpclient"
 	"net"
-	"snmpclient"
 	"strings"
 	"sync"
 	"sync/atomic"

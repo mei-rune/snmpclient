@@ -199,7 +199,6 @@ func (self *internal_pinger) serve() {
 		// if 0 == len(community) {
 		// 	community = self.community
 		// }
-
 		self.ch <- &PingResult{Id: id, Addr: ra, Version: ver, Community: self.community, SecurityParams: self.securityParams, Timestamp: time.Now()}
 		C.snmp_pdu_free(&pdu)
 	}
@@ -271,12 +270,12 @@ type Pinger struct {
 
 func NewPinger(network, laddr string, capacity int) (*Pinger, error) {
 	self := &Pinger{}
+	self.ch = make(chan *PingResult, capacity)
 	p, e := newpinger(network, laddr, &self.wait, self.ch, SNMP_V2C, "public", emptyParams)
 	if nil != e {
 		return nil, e
 	}
 	self.internal = p
-	self.ch = make(chan *PingResult, capacity)
 	return self, nil
 }
 
