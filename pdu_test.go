@@ -201,10 +201,11 @@ func checkPdu(vbs *VariableBindings, t *testing.T, s string) {
 }
 
 func TestEncodePDU(t *testing.T) {
+	bs := make([]byte, 1024)
 	pdu := &V2CPDU{version: SNMP_V1, requestId: 234}
 	pdu.Init(map[string]string{"snmp.community": "123987"})
 	fillPdu(pdu.GetVariableBindings())
-	bytes, e := pdu.encodePDU(*dump_pdu)
+	bytes, e := pdu.encodePDU(bs, *dump_pdu)
 	if nil != e {
 		t.Errorf("encode v1 pdu faile - %s", e.Error())
 	}
@@ -217,7 +218,7 @@ func TestEncodePDU(t *testing.T) {
 	pdu = &V2CPDU{version: SNMP_V2C, requestId: 234}
 	pdu.Init(map[string]string{"snmp.community": "123987"})
 	fillPdu(pdu.GetVariableBindings())
-	bytes, e = pdu.encodePDU(*dump_pdu)
+	bytes, e = pdu.encodePDU(bs, *dump_pdu)
 	if nil != e {
 		t.Errorf("encode v2 pdu faile - %s", e.Error())
 	}
@@ -312,7 +313,8 @@ func testEncodeV3PDU(t *testing.T, args map[string]string, txt, msg string) {
 		// usm.localization_priv_key = usm.priv_key
 	}
 	fillPdu(pduv3.GetVariableBindings())
-	bytes, e := pduv3.encodePDU(*dump_pdu)
+	bs := make([]byte, 1024)
+	bytes, e := pduv3.encodePDU(bs, *dump_pdu)
 	if nil != e {
 		t.Errorf("%sencode v3 pdu failed - %s", msg, e.Error())
 	}

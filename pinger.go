@@ -42,6 +42,7 @@ type internal_pinger struct {
 	wait           *sync.WaitGroup
 	ch             chan *PingResult
 	is_running     int32
+	cached_bytes   []byte
 }
 
 // make(chan *PingResult, capacity)
@@ -92,14 +93,14 @@ func (self *internal_pinger) GetChannel() <-chan *PingResult {
 var emptyParams = map[string]string{}
 
 func (self *internal_pinger) Send(raddr string) error {
-	return self.SendPdu(0, raddr, self.version, self.community, self.securityParams)
-}
-
-func (self *internal_pinger) SendPdu(id int, raddr string, version SnmpVersion, community string, securityParams map[string]string) error {
 	ra, err := net.ResolveUDPAddr(self.network, raddr)
 	if err != nil {
 		return fmt.Errorf("ResolveIPAddr(%q, %q) failed: %v", self.network, raddr, err)
 	}
+	return self.SendPdu(0, raddr, ra, self.version, self.community, self.securityParams)
+}
+
+func (self *internal_pinger) SendPdu(id int, raddr string, ra *net.UDPAddr, version SnmpVersion, community string, securityParams map[string]string) error {
 	if 0 == id {
 		self.id++
 		id = self.id
@@ -110,7 +111,7 @@ func (self *internal_pinger) SendPdu(id int, raddr string, version SnmpVersion, 
 	case SNMP_V1, SNMP_V2C:
 		pdu = &V2CPDU{op: SNMP_PDU_GET, version: version, requestId: id, target: raddr, community: community}
 		pdu.Init(emptyParams)
-		err = pdu.GetVariableBindings().Append("1.3.6.1.2.1.1.2.0", "")
+		err := pdu.GetVariableBindings().Append("1.3.6.1.2.1.1.2.0", "")
 		if err != nil {
 			return fmt.Errorf("AppendVariableBinding failed: %v", err)
 		}
@@ -122,7 +123,11 @@ func (self *internal_pinger) SendPdu(id int, raddr string, version SnmpVersion, 
 		return fmt.Errorf("Unsupported version - %v", version)
 	}
 
-	bytes, e := EncodePDU(pdu, false)
+	if nil == self.cached_bytes {
+		self.cached_bytes = make([]byte, 1024)
+	}
+
+	bytes, e := EncodePDU(pdu, self.cached_bytes, false)
 	if e != nil {
 		return fmt.Errorf("EncodePDU failed: %v", e)
 	}
@@ -280,21 +285,40 @@ func NewPinger(network, laddr string, capacity int) (*Pinger, error) {
 }
 
 func (self *Pinger) Close() {
-	self.internal.closeIO()
-	self.wait.Wait()
-	close(self.ch)
+	if nil == self {
+		return
+	}
+	if nil != self.internal {
+		self.internal.closeIO()
+		self.wait.Wait()
+		close(self.ch)
+	}
 }
 
 func (self *Pinger) GetChannel() <-chan *PingResult {
 	return self.ch
 }
 
+func (self *Pinger) SendPdu(id int, raddr string, ra *net.UDPAddr, version SnmpVersion, community string) error {
+	return self.internal.SendPdu(id, raddr, ra, version, community, nil)
+}
+
 func (self *Pinger) Send(id int, raddr string, version SnmpVersion, community string) error {
-	return self.internal.SendPdu(id, raddr, version, community, nil)
+	ra, err := net.ResolveUDPAddr(self.internal.network, raddr)
+	if err != nil {
+		return fmt.Errorf("ResolveIPAddr(%q, %q) failed: %v", self.internal.network, raddr, err)
+	}
+
+	return self.internal.SendPdu(id, raddr, ra, version, community, nil)
 }
 
 func (self *Pinger) SendV3(id int, raddr string, securityParams map[string]string) error {
-	return self.internal.SendPdu(id, raddr, SNMP_V3, "", securityParams)
+	ra, err := net.ResolveUDPAddr(self.internal.network, raddr)
+	if err != nil {
+		return fmt.Errorf("ResolveIPAddr(%q, %q) failed: %v", self.internal.network, raddr, err)
+	}
+
+	return self.internal.SendPdu(id, raddr, ra, SNMP_V3, "", securityParams)
 }
 
 func (self *Pinger) Recv(timeout time.Duration) (net.Addr, SnmpVersion, error) {

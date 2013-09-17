@@ -320,5 +320,5 @@ func (engine *snmpEngine) CopyFrom(src *snmpEngine) {
 type Client interface {
 	CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpError)
 	SendAndRecv(req PDU, timeout time.Duration) (PDU, SnmpError)
-	Stats() string
+	Stats() interface{}
 }

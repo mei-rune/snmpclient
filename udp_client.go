@@ -59,6 +59,7 @@ type UdpClient struct {
 	wait         sync.WaitGroup
 	next_id      int
 	host         string
+	cached_bytes []byte
 	engine       snmpEngine
 	conn         *net.UDPConn
 	pendings     map[int]*pendingRequest
@@ -78,6 +79,13 @@ func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, Sn
 	client.pendings = make(map[int]*pendingRequest)
 	client.DEBUG = debugWriter
 	client.ERROR = errorWriter
+
+	if client.engine.max_msg_size <= 0 {
+		client.engine.max_msg_size = uint(*maxPDUSize)
+	}
+
+	client.cached_bytes = make([]byte, int(client.engine.max_msg_size))
+
 	go client.serve()
 	client.wait.Add(1)
 	return client, nil
@@ -239,7 +247,6 @@ func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func
 
 func (client *UdpClient) returnString(timeout time.Duration, cb func() string) string {
 	c := make(chan string)
-	defer close(c)
 
 	client.c <- func() {
 		defer func() {
@@ -268,8 +275,8 @@ func (client *UdpClient) returnString(timeout time.Duration, cb func() string) s
 	}
 }
 
-func (client *UdpClient) Stats() string {
-	return fmt.Sprintf("%d", len(client.pendings))
+func (client *UdpClient) Stats() interface{} {
+	return map[string]interface{}{"pendings_requests": len(client.pendings), "queue": len(client.c)}
 }
 
 func (client *UdpClient) Test() error {
@@ -656,7 +663,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback func(PDU, SnmpError)) {
 		goto failed
 	}
 
-	bytes, err = EncodePDU(pdu, client.DEBUG.IsEnabled())
+	bytes, err = EncodePDU(pdu, client.cached_bytes, client.DEBUG.IsEnabled())
 	if nil != err {
 		err = newError(err.Code(), err, "encode pdu failed")
 		goto failed

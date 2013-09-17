@@ -115,7 +115,7 @@ func (pdu *V2CPDU) String() string {
 	return buffer.String()
 }
 
-func (pdu *V2CPDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
+func (pdu *V2CPDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 	var internal C.snmp_pdu_t
 	C.snmp_pdu_init(&internal)
 	defer C.snmp_pdu_free(&internal)
@@ -160,7 +160,7 @@ func (pdu *V2CPDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 		C.snmp_pdu_dump(&internal)
 	}
 
-	return encodeNativePdu(&internal)
+	return encodeNativePdu(bs, &internal)
 }
 
 func (pdu *V2CPDU) decodePDU(native *C.snmp_pdu_t) (bool, SnmpError) {
@@ -334,7 +334,7 @@ func (pdu *V3PDU) String() string {
 	return buffer.String()
 }
 
-func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
+func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 	var internal C.snmp_pdu_t
 	C.snmp_pdu_init(&internal)
 	defer C.snmp_pdu_free(&internal)
@@ -418,7 +418,7 @@ func (pdu *V3PDU) encodePDU(is_dump bool) ([]byte, SnmpError) {
 	if is_dump {
 		C.snmp_pdu_dump(&internal)
 	}
-	return encodeNativePdu(&internal)
+	return encodeNativePdu(bs, &internal)
 }
 
 func (pdu *V3PDU) decodePDU(native *C.snmp_pdu_t) (bool, SnmpError) {
@@ -516,27 +516,25 @@ func debug_init_secparams(pdu *C.snmp_pdu_t) {
 	}
 }
 
-func encodeNativePdu(pdu *C.snmp_pdu_t) ([]byte, SnmpError) {
+func encodeNativePdu(bs []byte, pdu *C.snmp_pdu_t) ([]byte, SnmpError) {
 	if pdu.engine.max_msg_size == 0 {
 		pdu.engine.max_msg_size = C.int32_t(*maxPDUSize)
 	}
 
-	bytes := make([]byte, int(pdu.engine.max_msg_size))
 	var buffer C.asn_buf_t
-	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&bytes[0])))
-	buffer.asn_len = C.size_t(len(bytes))
+	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&bs[0])))
+	buffer.asn_len = C.size_t(len(bs))
 
 	ret_code := C.snmp_pdu_encode(pdu, &buffer)
 	if 0 != ret_code {
 		err := Error(SnmpResult(ret_code), C.GoString(C.snmp_pdu_get_error(pdu, ret_code)))
 		return nil, err
 	}
-	length := C.get_buffer_length(&buffer, (*C.u_char)(unsafe.Pointer(&bytes[0])))
-	return bytes[0:length], nil
+	length := C.get_buffer_length(&buffer, (*C.u_char)(unsafe.Pointer(&bs[0])))
+	return bs[0:length], nil
 }
 
 func encodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) SnmpError {
-
 	if SNMP_MAX_BINDINGS < vbs.Len() {
 		return Errorf(SNMP_CODE_FAILED, "bindings too long, SNMP_MAX_BINDINGS is %d, variableBindings is %d",
 			SNMP_MAX_BINDINGS, vbs.Len())
@@ -746,9 +744,9 @@ func DecodePDU(bytes []byte, priv_type PrivType, priv_key []byte, is_dump bool) 
 	return nil, err
 }
 
-func EncodePDU(pdu PDU, is_dump bool) ([]byte, SnmpError) {
+func EncodePDU(pdu PDU, bs []byte, is_dump bool) ([]byte, SnmpError) {
 	if pdu.GetVersion() != SNMP_V3 {
-		return pdu.(*V2CPDU).encodePDU(is_dump)
+		return pdu.(*V2CPDU).encodePDU(bs, is_dump)
 	}
-	return pdu.(*V3PDU).encodePDU(is_dump)
+	return pdu.(*V3PDU).encodePDU(bs, is_dump)
 }
