@@ -30,7 +30,6 @@ type V2CPDU struct {
 	version          SnmpVersion
 	op               SnmpType
 	requestId        int
-	target           string
 	community        string
 	variableBindings VariableBindings
 	maxMsgSize       uint
@@ -84,10 +83,6 @@ func (pdu *V2CPDU) GetType() SnmpType {
 	return pdu.op
 }
 
-func (pdu *V2CPDU) GetTarget() string {
-	return pdu.target
-}
-
 func (pdu *V2CPDU) GetVariableBindings() *VariableBindings {
 	return &pdu.variableBindings
 }
@@ -97,8 +92,6 @@ func (pdu *V2CPDU) String() string {
 	buffer.WriteString(pdu.op.String())
 	buffer.WriteString(" variableBindings")
 	buffer.WriteString(pdu.variableBindings.String())
-	buffer.WriteString(" from ")
-	buffer.WriteString(pdu.target)
 	buffer.WriteString(" with community = '")
 	buffer.WriteString(pdu.community)
 	buffer.WriteString("' and requestId='")
@@ -187,7 +180,6 @@ type V3PDU struct {
 	op               SnmpType
 	requestId        int
 	identifier       int
-	target           string
 	securityModel    securityModelWithCopy
 	variableBindings VariableBindings
 	maxMsgSize       uint
@@ -281,10 +273,6 @@ func (pdu *V3PDU) GetType() SnmpType {
 	return pdu.op
 }
 
-func (pdu *V3PDU) GetTarget() string {
-	return pdu.target
-}
-
 func (pdu *V3PDU) GetVariableBindings() *VariableBindings {
 	return &pdu.variableBindings
 }
@@ -294,8 +282,6 @@ func (pdu *V3PDU) String() string {
 	buffer.WriteString(pdu.op.String())
 	buffer.WriteString(" variableBindings")
 	buffer.WriteString(pdu.variableBindings.String())
-	buffer.WriteString(" from ")
-	buffer.WriteString(pdu.target)
 	buffer.WriteString(" with ")
 	if nil == pdu.securityModel {
 		buffer.WriteString("securityModel is nil")

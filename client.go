@@ -290,7 +290,7 @@ type PDU interface {
 	GetRequestID() int
 	GetVersion() SnmpVersion
 	GetType() SnmpType
-	GetTarget() string
+	//GetTarget() string
 	GetVariableBindings() *VariableBindings
 	String() string
 }

@@ -295,9 +295,9 @@ func (client *UdpClient) CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpE
 
 	switch version {
 	case SNMP_V1, SNMP_V2C:
-		return &V2CPDU{op: op, version: version, target: client.host}, nil
+		return &V2CPDU{op: op, version: version}, nil
 	case SNMP_V3:
-		return &V3PDU{op: op, target: client.host}, nil
+		return &V3PDU{op: op}, nil
 	}
 	return nil, Errorf(SNMP_CODE_FAILED, "unsupported version: %d", version)
 }
@@ -350,7 +350,7 @@ func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
 	}
 
 	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
-	pdu := &V3PDU{op: SNMP_PDU_GET, target: client.host, securityModel: usm}
+	pdu := &V3PDU{op: SNMP_PDU_GET, securityModel: usm}
 	client.sendPdu(pdu, fn)
 }
 
