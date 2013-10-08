@@ -201,7 +201,7 @@ static enum asn_err get_var_binding(asn_buf_t *b, snmp_value_t *binding)
     case ASN_CLASS_APPLICATION|ASN_APP_OPAQUE:
     case ASN_TYPE_OCTETSTRING:
         binding->syntax = SNMP_SYNTAX_OCTETSTRING;
-        IncrementMemory();
+        INCREMENTMEMORY();
         binding->v.octetstring.octets = malloc(len);
         if (binding->v.octetstring.octets == NULL) {
             snmp_error("%s", strerror(errno));
@@ -212,7 +212,7 @@ static enum asn_err get_var_binding(asn_buf_t *b, snmp_value_t *binding)
             binding->v.octetstring.octets,
             &binding->v.octetstring.len);
         if (ASN_ERR_STOPPED(err)) {
-            DecrementMemory();
+            DECREMENTMEMORY();
             free(binding->v.octetstring.octets);
             binding->v.octetstring.octets = NULL;
         }
@@ -1275,7 +1275,7 @@ void snmp_pdu_init(snmp_pdu_t *pdu)
 void snmp_value_free(snmp_value_t *value)
 {
     if (value->syntax == SNMP_SYNTAX_OCTETSTRING) {
-        DecrementMemory();
+        DECREMENTMEMORY();
         free(value->v.octetstring.octets);
     }
     value->syntax = SNMP_SYNTAX_NULL;
@@ -1290,7 +1290,7 @@ int snmp_value_copy(snmp_value_t *to, const snmp_value_t *from)
         if ((to->v.octetstring.len = from->v.octetstring.len) == 0)
             to->v.octetstring.octets = NULL;
         else {
-            IncrementMemory();
+            INCREMENTMEMORY();
             to->v.octetstring.octets = malloc(to->v.octetstring.len);
             if (to->v.octetstring.octets == NULL)
                 return (-1);
@@ -1373,9 +1373,9 @@ int snmp_value_parse(const char *str, enum snmp_syntax syntax, snmp_values_t *v)
 # define STUFFC(C)     							                \
     if (alloc == len) {					                        \
     alloc += 100;      					                        \
-    if(0 == octs){ IncrementMemory(); }                         \
+    if(0 == octs){ INCREMENTMEMORY(); }                         \
     if ((nocts = (u_char*)realloc(octs, alloc)) == NULL) {	    \
-    DecrementMemory();                                          \
+    DECREMENTMEMORY();                                          \
     free(octs);                                                 \
     return (-1);                                                \
     }                                                           \
@@ -1391,7 +1391,7 @@ int snmp_value_parse(const char *str, enum snmp_syntax syntax, snmp_values_t *v)
                 while((c = *str++) != '\0') {
                     if (c == '"') {
                         if (*str != '\0') {
-                            DecrementMemory();
+                            DECREMENTMEMORY();
                             free(octs);
                             return (-1);
                         }
@@ -1464,7 +1464,7 @@ int snmp_value_parse(const char *str, enum snmp_syntax syntax, snmp_values_t *v)
                     oct = strtoul(str, &end, 16);
                     str = end;
                     if (oct > 0xff) {
-                        DecrementMemory();
+                        DECREMENTMEMORY();
                         free(octs);
                         return (-1);
                     }
@@ -1472,7 +1472,7 @@ int snmp_value_parse(const char *str, enum snmp_syntax syntax, snmp_values_t *v)
                     if (*str == ':')
                         str++;
                     else if(*str != '\0') {
-                        DecrementMemory();
+                        DECREMENTMEMORY();
                         free(octs);
                         return (-1);
                     }

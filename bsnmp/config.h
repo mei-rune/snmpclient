@@ -52,4 +52,9 @@
 #endif
 //#define HAVE_LIBCRYPTO 1
 
+
+#define DECREMENTMEMORY()
+
+#define INCREMENTMEMORY()
+
 #endif

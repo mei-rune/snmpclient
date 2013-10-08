@@ -147,7 +147,7 @@ getaddrinfo(const char *host, const char *port, const struct addrinfo *hints,
 	if ((*res = malloc(sizeof(**res))) == NULL)
 		return (HOST_NOT_FOUND);
 
-  IncrementMemory();
+  INCREMENTMEMORY();
 	(*res)->ai_flags = hints->ai_flags;
 	(*res)->ai_family = hints->ai_family;
 	(*res)->ai_socktype = hints->ai_socktype;
@@ -158,7 +158,7 @@ getaddrinfo(const char *host, const char *port, const struct addrinfo *hints,
 		freeaddrinfo(*res);
 		return (HOST_NOT_FOUND);
 	}
-  IncrementMemory();
+  INCREMENTMEMORY();
 
 	(*res)->ai_addrlen = sizeof(struct sockaddr_in);
 	s = (struct sockaddr_in *)(*res)->ai_addr;

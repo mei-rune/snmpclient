@@ -59,12 +59,15 @@ type UdpClient struct {
 	wait         sync.WaitGroup
 	next_id      int
 	host         string
-	cached_bytes []byte
 	engine       snmpEngine
 	conn         *net.UDPConn
 	pendings     map[int]*pendingRequest
 
 	lastActive time.Time
+
+	cached_rlock      sync.Mutex
+	cached_writeBytes []byte
+	cached_readBytes  []byte
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
@@ -84,7 +87,7 @@ func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, Sn
 		client.engine.max_msg_size = uint(*maxPDUSize)
 	}
 
-	client.cached_bytes = make([]byte, int(client.engine.max_msg_size))
+	client.cached_writeBytes = make([]byte, int(client.engine.max_msg_size))
 
 	go client.serve()
 	client.wait.Add(1)
@@ -475,10 +478,17 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 
 	for 1 == atomic.LoadInt32(&client.status) {
 		var length int
-		var bytes []byte
+		var bs []byte
 
-		bytes = make([]byte, *maxPDUSize)
-		length, err = conn.Read(bytes)
+		client.cached_rlock.Lock()
+		bs = client.cached_readBytes
+		client.cached_readBytes = nil
+		client.cached_rlock.Unlock()
+		if nil == bs {
+			bs = make([]byte, *maxPDUSize)
+		}
+
+		length, err = conn.Read(bs)
 
 		if 1 != atomic.LoadInt32(&client.status) {
 			break
@@ -491,12 +501,18 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 
 		if client.DEBUG.IsEnabled() {
 			client.DEBUG.Printf("snmp - read ok")
-			client.DEBUG.Print(hex.EncodeToString(bytes[:length]))
+			client.DEBUG.Print(hex.EncodeToString(bs[:length]))
 		}
 
-		func(buf []byte) {
-			client.c <- func() { client.handleRecv(buf) }
-		}(bytes[:length])
+		func(cached, buf []byte) {
+			client.c <- func() {
+				client.handleRecv(buf)
+
+				client.cached_rlock.Lock()
+				client.cached_readBytes = cached
+				client.cached_rlock.Unlock()
+			}
+		}(bs, bs[:length])
 	}
 
 	if 1 == atomic.LoadInt32(&client.status) {
@@ -589,9 +605,9 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 			C.snmp_pdu_dump(&pdu)
 		}
 
-		var v2 V2CPDU
+		v2 := &V2CPDU{}
 		_, err = v2.decodePDU(&pdu)
-		result = &v2
+		result = v2
 	}
 
 complete:
@@ -663,7 +679,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback func(PDU, SnmpError)) {
 		goto failed
 	}
 
-	bytes, err = EncodePDU(pdu, client.cached_bytes, client.DEBUG.IsEnabled())
+	bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
 	if nil != err {
 		err = newError(err.Code(), err, "encode pdu failed")
 		goto failed

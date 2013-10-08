@@ -101,6 +101,14 @@ func (self *internal_pinger) Send(raddr string) error {
 }
 
 func (self *internal_pinger) SendPdu(id int, ra *net.UDPAddr, version SnmpVersion, community string, securityParams map[string]string) error {
+	// start_at := time.Now()
+	// var send_elapsed time.Duration = 0
+	// defer func() {
+	// 	interval := time.Now().Sub(start_at)
+	// 	if interval > 10*time.Millisecond {
+	// 		log.Println("[snmp-ping] send to", ra.String(), " elapsed ", interval, send_elapsed)
+	// 	}
+	// }()
 	if 0 == id {
 		self.id++
 		id = self.id
@@ -131,7 +139,10 @@ func (self *internal_pinger) SendPdu(id int, ra *net.UDPAddr, version SnmpVersio
 	if e != nil {
 		return fmt.Errorf("EncodePDU failed: %v", e)
 	}
+
+	//before_at := time.Now()
 	l, err := self.conn.WriteTo(bytes, ra)
+	//send_elapsed = time.Now().Sub(before_at)
 	if err != nil {
 		return fmt.Errorf("WriteTo failed: %v", err)
 	}

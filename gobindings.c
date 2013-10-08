@@ -34,10 +34,10 @@ void snmp_value_put_octets(snmp_values_t* value, void *octets, u_int octets_len)
   if ( 0 != octets_len ) {
     if (0 != value->octetstring.octets) {
       free(value->octetstring.octets);
-      DecrementMemory();
+      DECREMENTMEMORY();
     }
 
-    IncrementMemory();
+    INCREMENTMEMORY();
     value->octetstring.octets = (u_char*)malloc(octets_len*sizeof(u_char));
     memcpy(value->octetstring.octets, octets, octets_len*sizeof(u_char));
   }

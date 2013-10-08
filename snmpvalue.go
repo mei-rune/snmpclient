@@ -1,7 +1,6 @@
 package snmpclient
 
 import (
-	"bytes"
 	//"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -207,40 +206,44 @@ func (s *SnmpOid) Concat(i ...int) SnmpOid {
 	return SnmpOid(result)
 }
 
+var number2bytes [][]byte
+var number2string []string
+
+func init() {
+	number2string = make([]string, 1000)
+	number2bytes = make([][]byte, 1000)
+	for i := 0; i < 1000; i++ {
+		s := strconv.FormatInt(int64(i), 10)
+		number2string[i] = s
+		number2bytes[i] = []byte(s)
+	}
+}
+
 func (oid *SnmpOid) GetString() string {
 	switch len(*oid) {
 	case 0:
 		return ""
 	case 1:
+		if 1000 > uint64((*oid)[0]) {
+			return number2string[uint64((*oid)[0])]
+		}
 		return strconv.FormatUint(uint64((*oid)[0]), 10)
 	case 2:
-		return strconv.FormatUint(uint64((*oid)[0]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[1]), 10)
-	case 3:
-		return strconv.FormatUint(uint64((*oid)[0]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[1]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[2]), 10)
-	case 4:
-		return strconv.FormatUint(uint64((*oid)[0]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[1]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[2]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[3]), 10)
-	case 5:
-		return strconv.FormatUint(uint64((*oid)[0]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[1]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[2]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[3]), 10) + "." +
-			strconv.FormatUint(uint64((*oid)[4]), 10)
+		if 1000 > uint64((*oid)[0]) {
+			if 1000 > uint64((*oid)[1]) {
+				return number2string[uint64((*oid)[0])] + "." +
+					number2string[uint64((*oid)[1])]
+			}
+		}
 	}
 
-	var result bytes.Buffer
+	result := make([]byte, 0, 256)
 	for _, v := range *oid {
-		result.WriteString(strconv.FormatUint(uint64(v), 10))
-		result.WriteString(".")
+		result = strconv.AppendUint(result, uint64(v), 10)
+		result = append(result, '.')
 	}
 
-	result.Truncate(result.Len() - 1)
-	return result.String()
+	return string(result[:len(result)-1])
 }
 
 func (s *SnmpOid) IsError() bool {

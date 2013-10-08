@@ -10,27 +10,31 @@ import "C"
 import (
 	"errors"
 	"expvar"
-	"sync"
+	"strconv"
+	"sync/atomic"
 	"unsafe"
 )
 
-var mlock sync.Mutex
-var malloc_count = expvar.NewInt("malloc_count")
+type AtomicInt struct{}
+
+func (v *AtomicInt) String() string {
+	return strconv.FormatInt(int64(atomic.LoadInt32(&malloc_count)), 10)
+}
+
+var malloc_count int32 = 0
+
+func init() {
+	expvar.Publish("malloc_count", &AtomicInt{})
+}
 
 //export IncrementMemory
 func IncrementMemory() {
-	mlock.Lock()
-	defer mlock.Unlock()
-
-	malloc_count.Add(1)
+	atomic.AddInt32(&malloc_count, 1)
 }
 
 //export DecrementMemory
 func DecrementMemory() {
-	mlock.Lock()
-	defer mlock.Unlock()
-
-	malloc_count.Add(-1)
+	atomic.AddInt32(&malloc_count, -1)
 }
 
 func memcpy(dst *C.uint8_t, capacity int, src []byte) error {
@@ -74,9 +78,9 @@ func strcpy(dst *C.char, capacity int, src string) error {
 		return errors.New("string too long.")
 	}
 	s := C.CString(src)
-	IncrementMemory()
+	//IncrementMemory()
 	C.strcpy(dst, s)
 	C.free(unsafe.Pointer(s))
-	DecrementMemory()
+	//DecrementMemory()
 	return nil
 }
