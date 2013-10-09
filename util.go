@@ -3,6 +3,7 @@ package snmpclient
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 )
@@ -57,7 +58,7 @@ func (err *snmpException) Code() SnmpResult {
 	return err.code
 }
 
-// Errorf formats according to a format specifier and returns the string 
+// Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 func Errorf(code SnmpResult, format string, a ...interface{}) SnmpError {
 	return &snmpException{code: code, message: fmt.Sprintf(format, a...)}
@@ -99,12 +100,11 @@ type fmtWriter struct {
 func (l *fmtWriter) IsEnabled() bool { return true }
 
 func (l *fmtWriter) Printf(format string, v ...interface{}) {
-	fmt.Printf(format, v...)
-	fmt.Println()
+	log.Printf(format, v...)
 }
 
 func (l *fmtWriter) Print(v ...interface{}) {
-	fmt.Println(v...)
+	log.Println(v...)
 }
 
 func ParseSnmpVersion(v string) (SnmpVersion, error) {

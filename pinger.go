@@ -19,7 +19,7 @@ import (
 	"unsafe"
 )
 
-var TimeoutError = newError(SNMP_CODE_TIMEOUT, nil, "time out")
+var TimeoutError = newError(SNMP_CODE_TIMEOUT, nil, "read snmp time out")
 
 type PingResult struct {
 	Id             int

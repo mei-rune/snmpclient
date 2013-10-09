@@ -89,6 +89,7 @@ type UdpClient struct {
 	wait         sync.WaitGroup
 	next_id      int
 	host         string
+	logCtx       string
 	engine       snmpEngine
 	conn         *net.UDPConn
 	conn_ok      int32
@@ -104,7 +105,7 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &nullWriter{}, &nullWriter{})
+	return NewSnmpClientWith(host, &nullWriter{}, &fmtWriter{})
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
@@ -114,6 +115,7 @@ func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, Sn
 		client_c: make(chan *clientRequest),
 		bytes_c:  make(chan bytesRequest, 100)}
 
+	client.logCtx = "[snmpclient-" + client.host + "]"
 	client.pendings = make(map[int]*clientRequest)
 	client.DEBUG = debugWriter
 	client.ERROR = errorWriter
@@ -150,17 +152,14 @@ func (client *UdpClient) serve() {
 				}
 				buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
 			}
-			client.ERROR.Print(buffer.String())
+			client.ERROR.Print(client.logCtx, buffer.String())
 		}
 		atomic.StoreInt32(&client.is_closed, 1)
 		client.wait.Done()
 	}()
 
 	defer func() {
-		client.cached_rlock.Lock()
-		client.conn_error = errors.New("client is closed")
-		client.cached_rlock.Unlock()
-		client.onDisconnection()
+		client.onDisconnection(errors.New("client is closed"))
 
 		client.disconnect()
 	}()
@@ -210,7 +209,7 @@ func (client *UdpClient) fireTick() {
 	}
 
 	if 1 != atomic.LoadInt32(&client.conn_ok) {
-		client.onDisconnection()
+		client.onDisconnection(nil)
 	}
 }
 
@@ -270,6 +269,8 @@ func toSnmpCodeError(e error) SnmpError {
 func (client *UdpClient) SendAndRecv(req PDU, timeout time.Duration) (pdu PDU, err SnmpError) {
 	if timeout > 1*time.Minute {
 		timeout = 1 * time.Minute
+	} else if timeout < 1*time.Second {
+		timeout = 1 * time.Second
 	}
 
 	request := newRequest()
@@ -416,7 +417,7 @@ func (client *UdpClient) connect() SnmpError {
 		}
 		client.conn.Close()
 		client.conn = nil
-		client.onDisconnection()
+		client.onDisconnection(nil)
 	}
 
 	addr, err := net.ResolveUDPAddr("udp", client.host)
@@ -437,7 +438,7 @@ func (client *UdpClient) disconnect() {
 	defer func() {
 		client.conn = nil
 		if err := recover(); nil != err {
-			client.ERROR.Print(err)
+			client.DEBUG.Print(client.logCtx, err)
 		}
 	}()
 	if nil != client.conn {
@@ -452,9 +453,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 
 	defer func() {
 		if err := recover(); nil != err {
-			client.ERROR.Print(err)
-		} else {
-			client.ERROR.Print("read connection complete, exit")
+			client.ERROR.Print("[panic]", client.logCtx, " read udp failed,", err)
 		}
 		conn.Close()
 		atomic.StoreInt32(&client.conn_ok, 0)
@@ -481,7 +480,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 			client.cached_rlock.Lock()
 			client.conn_error = err
 			client.cached_rlock.Unlock()
-			client.ERROR.Print("read data from conn failed", err)
+			client.ERROR.Print(client.logCtx, "read udp from conn failed", err)
 			break
 		}
 
@@ -492,17 +491,22 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 
 		client.bytes_c <- bytesRequest{cached: bs, length: length}
 	}
+
+	client.ERROR.Print(client.logCtx, "read udp is exited.")
 }
 
-func (client *UdpClient) onDisconnection() {
-	client.cached_rlock.Lock()
-	err := client.conn_error
-	client.cached_rlock.Unlock()
+func (client *UdpClient) onDisconnection(err error) {
 	if nil == err {
-		err = disconnectError
+		client.cached_rlock.Lock()
+		err = client.conn_error
+		client.cached_rlock.Unlock()
+		if nil == err {
+			err = disconnectError
+		}
 	}
 
 	e := newError(SNMP_CODE_BADNET, err, "read from '"+client.host+"' failed")
+
 	for _, req := range client.pendings {
 		req.reply(nil, e)
 	}
@@ -521,7 +525,7 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 
 	err := DecodePDUHeader(&buffer, &pdu)
 	if nil != err {
-		client.ERROR.Print(err)
+		client.ERROR.Print(client.logCtx, "decode head of pdu failed", err)
 		return
 	}
 	defer C.snmp_pdu_free(&pdu)
@@ -529,10 +533,11 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 	if uint32(SNMP_V3) == pdu.version {
 		req, ok = client.pendings[int(pdu.identifier)]
 		if !ok {
-			client.ERROR.Printf("not found request with requestId = %d, %d.\r\n", int(pdu.identifier), int(pdu.request_id))
-			for i, _ := range client.pendings {
-				client.ERROR.Print(i)
-			}
+			client.ERROR.Print(client.logCtx, "request with requestId was ", int(pdu.identifier), " or ", int(pdu.request_id), " is not exists.")
+
+			// for i, _ := range client.pendings {
+			// 	client.ERROR.Print(i)
+			// }
 			return
 		}
 		delete(client.pendings, int(pdu.identifier))
@@ -550,13 +555,13 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 		err = FillUser(&pdu, usm.auth_proto, usm.localization_auth_key,
 			usm.priv_proto, usm.localization_priv_key)
 		if nil != err {
-			client.ERROR.Print(err.Error())
+			client.ERROR.Print(client.logCtx, "fill user information failed,", err.Error())
 			goto complete
 		}
 
 		err = DecodePDUBody(&buffer, &pdu)
 		if nil != err {
-			client.ERROR.Print(err.Error())
+			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			goto complete
 		}
 
@@ -570,13 +575,13 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 	} else {
 		err = DecodePDUBody(&buffer, &pdu)
 		if nil != err {
-			client.ERROR.Print(err.Error())
+			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			return
 		}
 
 		req, ok = client.pendings[int(pdu.request_id)]
 		if !ok {
-			client.ERROR.Printf("not found request with requestId = %d.\r\n", int(pdu.request_id))
+			client.ERROR.Print(client.logCtx, "request with requestId was", int(pdu.request_id), "is not exists.")
 			return
 		}
 		delete(client.pendings, int(pdu.request_id))
@@ -618,9 +623,7 @@ func (client *UdpClient) handleSend(reply *clientRequest, pdu PDU) {
 	return
 failed:
 
-	if client.ERROR.IsEnabled() {
-		client.ERROR.Print("snmp - send failed, " + err.Error() + " " + pdu.String())
-	}
+	client.ERROR.Print(client.logCtx, "snmp - send failed, ", err, " - ", pdu)
 
 	reply.reply(nil, toSnmpCodeError(err))
 	return
@@ -640,7 +643,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	_, ok := client.pendings[pdu.GetRequestID()]
 	if ok {
 		err = Error(SNMP_CODE_FAILED, "identifier is repected.")
-		goto failed
+		goto failed_no_remove_pendings
 	}
 
 	bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
@@ -655,6 +658,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	if nil != e {
 		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
+		client.onDisconnection(err)
 		goto failed
 	}
 
@@ -664,13 +668,14 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	}
 
 	return
-failed:
 
+failed:
+	delete(client.pendings, pdu.GetRequestID())
+failed_no_remove_pendings:
 	if client.ERROR.IsEnabled() {
-		client.ERROR.Print("snmp - send failed, " + err.Error() + ", " + pdu.String())
+		client.ERROR.Print(client.logCtx, "snmp - send failed, ", err, ", ", pdu)
 	}
 
-	delete(client.pendings, pdu.GetRequestID())
 	callback.reply(nil, err)
 	return
 }
