@@ -22,50 +22,83 @@ import (
 var (
 	maxPDUSize  = flag.Uint("maxPDUSize", 2048, "set max size of pdu")
 	deadTimeout = flag.Int("deadTimeout", 1, "set timeout(Minute) of client to dead")
+
+	disconnectError = errors.New("connection is disconnected.")
 )
 
-type pendingRequest struct {
-	client *UdpClient
+// type clientReply interface {
+// 	reply(pdu PDU, e SnmpError)
+// }
 
-	pdu      PDU
-	callback func(PDU, SnmpError)
+type clientRequest struct {
+	c        chan *clientRequest
+	timeout  time.Duration
+	request  PDU
+	response PDU
+	e        SnmpError
+	cb       func(pdu PDU, e SnmpError)
 }
 
-func (req *pendingRequest) reply(result PDU, err SnmpError) {
-
-	if req.client.DEBUG.IsEnabled() {
-		if nil != err {
-			req.client.DEBUG.Printf("[snmp] - recv pdu failed, %v", err)
-		} else {
-			req.client.DEBUG.Printf("[snmp] - recv pdu success, %v", result)
-		}
+func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
+	if nil != cr.cb {
+		cr.cb(pdu, e)
+		return
 	}
 
-	if nil == req {
-		panic("req is nil")
-	}
+	cr.response = pdu
+	cr.e = e
+	cr.c <- cr
+}
 
-	if nil == req.callback {
-		panic("callback is nil")
-	}
+var (
+	requests_mutex sync.Mutex
+	requests_cache = newRequestBuffer(make([]*clientRequest, 1000))
+)
 
-	req.callback(result, err)
+func newRequest() *clientRequest {
+	requests_mutex.Lock()
+	cached := requests_cache.Pop()
+	requests_mutex.Unlock()
+	if nil != cached {
+		return cached
+	}
+	return &clientRequest{c: make(chan *clientRequest, 1)}
+}
+
+func releaseRequest(will_cache *clientRequest) {
+	will_cache.request = nil
+	will_cache.response = nil
+	will_cache.e = nil
+	will_cache.cb = nil
+
+	requests_mutex.Lock()
+	requests_cache.Push(will_cache)
+	requests_mutex.Unlock()
+}
+
+type bytesRequest struct {
+	cached []byte
+	length int
 }
 
 type UdpClient struct {
 	DEBUG, ERROR Writer
-	status       int32
-	c            chan func()
+	is_closed    int32
+	client_c     chan *clientRequest
+	bytes_c      chan bytesRequest
 	wait         sync.WaitGroup
 	next_id      int
 	host         string
 	engine       snmpEngine
 	conn         *net.UDPConn
-	pendings     map[int]*pendingRequest
+	conn_ok      int32
+	pendings     map[int]*clientRequest
 
-	lastActive time.Time
+	lastAt time.Time
+	isOK   int32
 
 	cached_rlock      sync.Mutex
+	conn_error        error
 	cached_writeBytes []byte
 	cached_readBytes  []byte
 }
@@ -75,11 +108,13 @@ func NewSnmpClient(host string) (Client, SnmpError) {
 }
 
 func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
-	client := &UdpClient{status: 1,
-		host:       NormalizeAddress(host),
-		lastActive: time.Now(),
-		c:          make(chan func())}
-	client.pendings = make(map[int]*pendingRequest)
+	client := &UdpClient{host: NormalizeAddress(host),
+		lastAt:   time.Now(),
+		isOK:     1,
+		client_c: make(chan *clientRequest),
+		bytes_c:  make(chan bytesRequest, 100)}
+
+	client.pendings = make(map[int]*clientRequest)
 	client.DEBUG = debugWriter
 	client.ERROR = errorWriter
 
@@ -95,9 +130,11 @@ func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, Sn
 }
 
 func (client *UdpClient) Close() {
-	if !atomic.CompareAndSwapInt32(&client.status, 1, 0) {
+	if !atomic.CompareAndSwapInt32(&client.is_closed, 0, 1) {
 		return
 	}
+
+	close(client.client_c)
 	client.wait.Wait()
 }
 
@@ -115,21 +152,36 @@ func (client *UdpClient) serve() {
 			}
 			client.ERROR.Print(buffer.String())
 		}
+		atomic.StoreInt32(&client.is_closed, 1)
 		client.wait.Done()
 	}()
 
 	defer func() {
-		client.onDisconnection(nil)
-		client.safelyKillConnection()
+		client.cached_rlock.Lock()
+		client.conn_error = errors.New("client is closed")
+		client.cached_rlock.Unlock()
+		client.onDisconnection()
+
+		client.disconnect()
 	}()
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	for 1 == atomic.LoadInt32(&client.status) {
+	is_running := true
+	for is_running {
 		select {
-		case f := <-client.c:
-			client.executeCommand(f)
+		case request, ok := <-client.client_c:
+			if !ok {
+				is_running = false
+				break
+			}
+			client.executeRequest(request)
+		case data := <-client.bytes_c:
+			client.handleRecv(data.cached[:data.length])
+			client.cached_rlock.Lock()
+			client.cached_readBytes = data.cached
+			client.cached_rlock.Unlock()
 		case <-ticker.C:
 			client.fireTick()
 		}
@@ -138,8 +190,12 @@ func (client *UdpClient) serve() {
 	next := true
 	for next {
 		select {
-		case f := <-client.c:
-			client.executeCommand(f)
+		case request, ok := <-client.client_c:
+			if !ok {
+				next = false
+				break
+			}
+			client.executeRequest(request)
 		default:
 			next = false
 		}
@@ -147,9 +203,18 @@ func (client *UdpClient) serve() {
 }
 
 func (client *UdpClient) fireTick() {
+	if time.Now().After(client.lastAt.Add(time.Duration(*deadTimeout) * time.Minute)) {
+		atomic.StoreInt32(&client.isOK, 0)
+	} else {
+		atomic.StoreInt32(&client.isOK, 1)
+	}
+
+	if 1 != atomic.LoadInt32(&client.conn_ok) {
+		client.onDisconnection()
+	}
 }
 
-func (client *UdpClient) executeCommand(cb func()) {
+func (client *UdpClient) executeRequest(request *clientRequest) {
 	defer func() {
 		if e := recover(); nil != e {
 			var buffer bytes.Buffer
@@ -161,134 +226,24 @@ func (client *UdpClient) executeCommand(cb func()) {
 				}
 				buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
 			}
-			client.DEBUG.Print(buffer.String())
+			msg := buffer.String()
+			request.reply(nil, Error(SNMP_CODE_FAILED, msg))
+			client.DEBUG.Print(msg)
 		}
 	}()
 
-	cb()
-}
-
-func (client *UdpClient) returnError(timeout time.Duration, cb func() error) error {
-	c := make(chan error)
-	defer close(c)
-
-	client.c <- func() {
-		defer func() {
-			if e := recover(); nil != e {
-				var buffer bytes.Buffer
-				buffer.WriteString(fmt.Sprintf("[panic]%v", e))
-				for i := 1; ; i += 1 {
-					_, file, line, ok := runtime.Caller(i)
-					if !ok {
-						break
-					}
-					buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
-				}
-				c <- errors.New(buffer.String())
-			}
-		}()
-
-		c <- cb()
-	}
-
-	select {
-	case res := <-c:
-		return res
-	case <-time.After(timeout):
-		return TimeoutError
-	}
-}
-
-type client_request struct {
-	pdu PDU
-	e   SnmpError
-}
-
-func (client *UdpClient) returnPDU(timeout time.Duration, cb func(reply_pdu func(pdu PDU, e SnmpError))) (PDU, SnmpError) {
-	c := make(chan *client_request)
-
-	client.c <- func() {
-		is_reply := false
-		reply := func(pdu PDU, e SnmpError) {
-			if is_reply {
-				return
-			}
-
-			is_reply = true
-			c <- &client_request{pdu: pdu, e: e}
-			close(c)
-		}
-
-		defer func() {
-			if e := recover(); nil != e {
-				var buffer bytes.Buffer
-				buffer.WriteString(fmt.Sprintf("[panic]%v", e))
-				for i := 1; ; i += 1 {
-					_, file, line, ok := runtime.Caller(i)
-					if !ok {
-						break
-					}
-					buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
-				}
-				c <- &client_request{pdu: nil, e: Error(SNMP_CODE_FAILED, buffer.String())}
-			}
-		}()
-
-		cb(reply)
-	}
-
-	//fmt.Println("TIMEOUT", timeout)
-	select {
-	case res := <-c:
-		//fmt.Println("TIMEOUT1", timeout)
-		return res.pdu, res.e
-	case <-time.After(timeout):
-		//fmt.Println("TIMEOUT2", timeout)
-		return nil, newError(SNMP_CODE_TIMEOUT, TimeoutError, "")
-	}
-}
-
-func (client *UdpClient) returnString(timeout time.Duration, cb func() string) string {
-	c := make(chan string)
-
-	client.c <- func() {
-		defer func() {
-			if e := recover(); nil != e {
-				var buffer bytes.Buffer
-				buffer.WriteString(fmt.Sprintf("[panic]%v", e))
-				for i := 1; ; i += 1 {
-					_, file, line, ok := runtime.Caller(i)
-					if !ok {
-						break
-					}
-					buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
-				}
-				c <- buffer.String()
-			}
-		}()
-
-		c <- cb()
-	}
-
-	select {
-	case res := <-c:
-		return res
-	case <-time.After(timeout):
-		return "[panic]time out"
-	}
+	client.handleSend(request, request.request)
 }
 
 func (client *UdpClient) Stats() interface{} {
-	return map[string]interface{}{"pendings_requests": len(client.pendings), "queue": len(client.c)}
+	return map[string]interface{}{"pendings_requests": len(client.pendings), "queue": len(client.client_c)}
 }
 
 func (client *UdpClient) Test() error {
-	return client.returnError(1*time.Minute, func() error {
-		if time.Now().After(client.lastActive.Add(time.Duration(*deadTimeout) * time.Minute)) {
-			return errors.New("it is expired.")
-		}
-		return nil
-	})
+	if 0 == atomic.LoadInt32(&client.isOK) {
+		return errors.New("it is expired.")
+	}
+	return nil
 }
 
 func (client *UdpClient) CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpError) {
@@ -316,50 +271,28 @@ func (client *UdpClient) SendAndRecv(req PDU, timeout time.Duration) (pdu PDU, e
 	if timeout > 1*time.Minute {
 		timeout = 1 * time.Minute
 	}
-	pdu, err = client.returnPDU(timeout, func(reply func(pdu PDU, e SnmpError)) {
-		client.handleSend(reply, req)
-	})
 
-	if nil != err && SNMP_CODE_TIMEOUT == err.Code() && 0 != req.GetRequestID() {
-		client.c <- func() {
-			delete(client.pendings, req.GetRequestID())
-		}
+	request := newRequest()
+	request.request = req
+	request.timeout = timeout
+
+	client.handleSend(request, req)
+
+	select {
+	case res := <-request.c:
+		response := res.response
+		e := res.e
+		releaseRequest(res)
+		return response, e
+	case <-time.After(timeout):
+		return nil, TimeoutError
 	}
-
 	return
 }
 
-func (client *UdpClient) createConnect() SnmpError {
-	if nil != client.conn {
-		return nil
-	}
-	addr, err := net.ResolveUDPAddr("udp", client.host)
-	if nil != err {
-		return newError(SNMP_CODE_FAILED, err, "parse address failed")
-	}
-	client.conn, err = net.DialUDP("udp", nil, addr)
-	if nil != err {
-		return newError(SNMP_CODE_FAILED, err, "bind udp port failed")
-	}
-
-	go client.readUDP(client.conn)
-	return nil
-}
-
-func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
-
-	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Printf("snmp - discover snmp engine")
-	}
-
-	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
-	pdu := &V3PDU{op: SNMP_PDU_GET, securityModel: usm}
-	client.sendPdu(pdu, fn)
-}
-
-func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU, autoDiscoverEngine bool) {
+func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDiscoverEngine bool) {
 	if nil == pdu.securityModel {
-		reply(nil, Error(SNMP_CODE_FAILED, "securityModel is nil"))
+		request.reply(nil, Error(SNMP_CODE_FAILED, "securityModel is nil"))
 		return
 	}
 
@@ -368,14 +301,16 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 			if client.DEBUG.IsEnabled() {
 				client.DEBUG.Printf("snmp - send failed, nil == pdu.engine, " + pdu.String())
 			}
-			reply(nil, Error(SNMP_CODE_FAILED, "nil == pdu.engine"))
+			request.reply(nil, Error(SNMP_CODE_FAILED, "nil == pdu.engine"))
 			return
 		}
 		pdu.securityModel.Localize(pdu.engine.engine_id)
 	}
 
 	if autoDiscoverEngine {
-		client.sendPdu(pdu, func(resp PDU, err SnmpError) {
+		request.cb = func(resp PDU, err SnmpError) {
+			request.cb = nil
+
 			if nil != err {
 				switch err.Code() {
 				case SNMP_CODE_NOTINTIME, SNMP_CODE_BADENGINE:
@@ -384,7 +319,7 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 						pdu.engine.engine_id = nil
 					}
 					client.engine.engine_id = nil
-					client.discoverEngineAndSend(reply, pdu)
+					client.discoverEngineAndSend(request, pdu)
 					return
 				}
 			}
@@ -397,17 +332,28 @@ func (client *UdpClient) sendV3PDU(reply func(pdu PDU, e SnmpError), pdu *V3PDU,
 				}
 			}
 
-			reply(resp, err)
-		})
-	} else {
-		client.sendPdu(pdu, reply)
+			request.reply(resp, err)
+		}
 	}
+	client.sendPdu(pdu, request)
 }
 
-func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError), pdu *V3PDU) {
+func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
+	if client.DEBUG.IsEnabled() {
+		client.DEBUG.Printf("snmp - discover snmp engine")
+	}
 
+	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
+	pdu := &V3PDU{op: SNMP_PDU_GET, securityModel: usm}
+	request := newRequest()
+	request.request = pdu
+	request.cb = fn
+	client.sendPdu(pdu, request)
+}
+
+func (client *UdpClient) discoverEngineAndSend(request *clientRequest, pdu *V3PDU) {
 	if nil != pdu.engine && nil != pdu.engine.engine_id && 0 != len(pdu.engine.engine_id) {
-		client.sendV3PDU(reply, pdu, false)
+		client.sendV3PDU(request, pdu, false)
 		return
 	}
 
@@ -417,7 +363,7 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 		} else {
 			pdu.engine.CopyFrom(&client.engine)
 		}
-		client.sendV3PDU(reply, pdu, true)
+		client.sendV3PDU(request, pdu, true)
 		return
 	}
 
@@ -432,7 +378,7 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 			if client.DEBUG.IsEnabled() {
 				client.DEBUG.Printf("snmp - recv pdu, " + err.Error())
 			}
-			reply(nil, err)
+			request.reply(nil, err)
 			return
 		}
 		v3, ok := resp.(*V3PDU)
@@ -448,7 +394,7 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 				client.DEBUG.Printf("snmp - recv pdu, " + err.Error())
 			}
 
-			reply(nil, err)
+			request.reply(nil, err)
 			return
 		}
 
@@ -459,24 +405,62 @@ func (client *UdpClient) discoverEngineAndSend(reply func(pdu PDU, e SnmpError),
 			pdu.engine.engine_id = client.engine.engine_id
 		}
 
-		client.sendV3PDU(reply, pdu, false)
+		client.sendV3PDU(request, pdu, false)
 	})
 }
 
+func (client *UdpClient) connect() SnmpError {
+	if nil != client.conn {
+		if 1 == atomic.LoadInt32(&client.conn_ok) {
+			return nil
+		}
+		client.conn.Close()
+		client.conn = nil
+		client.onDisconnection()
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", client.host)
+	if nil != err {
+		return newError(SNMP_CODE_FAILED, err, "parse address failed")
+	}
+	client.conn, err = net.DialUDP("udp", nil, addr)
+	if nil != err {
+		return newError(SNMP_CODE_FAILED, err, "bind udp port failed")
+	}
+
+	atomic.StoreInt32(&client.conn_ok, 1)
+	go client.readUDP(client.conn)
+	return nil
+}
+
+func (client *UdpClient) disconnect() {
+	defer func() {
+		client.conn = nil
+		if err := recover(); nil != err {
+			client.ERROR.Print(err)
+		}
+	}()
+	if nil != client.conn {
+		client.conn.Close()
+		client.conn = nil
+	}
+}
+
+// FIXME:  注意 conn 对象被多个goroutine 持有了，
 func (client *UdpClient) readUDP(conn *net.UDPConn) {
 	var err error
 
 	defer func() {
-		client.conn = nil
 		if err := recover(); nil != err {
 			client.ERROR.Print(err)
 		} else {
 			client.ERROR.Print("read connection complete, exit")
 		}
 		conn.Close()
+		atomic.StoreInt32(&client.conn_ok, 0)
 	}()
 
-	for 1 == atomic.LoadInt32(&client.status) {
+	for 0 == atomic.LoadInt32(&client.is_closed) {
 		var length int
 		var bs []byte
 
@@ -489,13 +473,15 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		}
 
 		length, err = conn.Read(bs)
-
-		if 1 != atomic.LoadInt32(&client.status) {
+		if 0 != atomic.LoadInt32(&client.is_closed) {
 			break
 		}
 
 		if nil != err {
-			client.ERROR.Print(err)
+			client.cached_rlock.Lock()
+			client.conn_error = err
+			client.cached_rlock.Unlock()
+			client.ERROR.Print("read data from conn failed", err)
 			break
 		}
 
@@ -504,35 +490,30 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 			client.DEBUG.Print(hex.EncodeToString(bs[:length]))
 		}
 
-		func(cached, buf []byte) {
-			client.c <- func() {
-				client.handleRecv(buf)
-
-				client.cached_rlock.Lock()
-				client.cached_readBytes = cached
-				client.cached_rlock.Unlock()
-			}
-		}(bs, bs[:length])
-	}
-
-	if 1 == atomic.LoadInt32(&client.status) {
-		client.c <- func() { client.onDisconnection(err) }
+		client.bytes_c <- bytesRequest{cached: bs, length: length}
 	}
 }
 
-func (client *UdpClient) onDisconnection(err error) {
+func (client *UdpClient) onDisconnection() {
+	client.cached_rlock.Lock()
+	err := client.conn_error
+	client.cached_rlock.Unlock()
+	if nil == err {
+		err = disconnectError
+	}
+
 	e := newError(SNMP_CODE_BADNET, err, "read from '"+client.host+"' failed")
 	for _, req := range client.pendings {
 		req.reply(nil, e)
 	}
-	client.pendings = make(map[int]*pendingRequest)
+	client.pendings = make(map[int]*clientRequest)
 }
 
 func (client *UdpClient) handleRecv(bytes []byte) {
 	var buffer C.asn_buf_t
 	var pdu C.snmp_pdu_t
 	var result PDU
-	var req *pendingRequest
+	var req *clientRequest
 	var ok bool
 
 	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&bytes[0])))
@@ -546,7 +527,6 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 	defer C.snmp_pdu_free(&pdu)
 
 	if uint32(SNMP_V3) == pdu.version {
-
 		req, ok = client.pendings[int(pdu.identifier)]
 		if !ok {
 			client.ERROR.Printf("not found request with requestId = %d, %d.\r\n", int(pdu.identifier), int(pdu.request_id))
@@ -557,7 +537,7 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 		}
 		delete(client.pendings, int(pdu.identifier))
 
-		v3old, ok := req.pdu.(*V3PDU)
+		v3old, ok := req.request.(*V3PDU)
 		if !ok {
 			err = Error(SNMP_CODE_FAILED, "receive pdu is a v3 pdu.")
 			goto complete
@@ -614,16 +594,13 @@ complete:
 	req.reply(result, err)
 }
 
-func (client *UdpClient) handleSend(reply func(pdu PDU, err SnmpError), pdu PDU) {
+func (client *UdpClient) handleSend(reply *clientRequest, pdu PDU) {
+	client.lastAt = time.Now()
 
-	client.lastActive = time.Now()
-
-	var err error = nil
-	if nil == client.conn {
-		err = client.createConnect()
-		if nil != err {
-			goto failed
-		}
+	var err error
+	err = client.connect()
+	if nil != err {
+		goto failed
 	}
 
 	if SNMP_V3 == pdu.GetVersion() {
@@ -645,24 +622,11 @@ failed:
 		client.ERROR.Print("snmp - send failed, " + err.Error() + " " + pdu.String())
 	}
 
-	reply(nil, toSnmpCodeError(err))
+	reply.reply(nil, toSnmpCodeError(err))
 	return
 }
 
-func (client *UdpClient) safelyKillConnection() {
-	defer func() {
-		client.conn = nil
-		if err := recover(); nil != err {
-			client.ERROR.Print(err)
-		}
-	}()
-	if nil != client.conn {
-		client.conn.Close()
-		client.conn = nil
-	}
-}
-
-func (client *UdpClient) sendPdu(pdu PDU, callback func(PDU, SnmpError)) {
+func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	if nil == callback {
 		panic("'callback' is nil")
 	}
@@ -685,11 +649,11 @@ func (client *UdpClient) sendPdu(pdu PDU, callback func(PDU, SnmpError)) {
 		goto failed
 	}
 
-	client.pendings[pdu.GetRequestID()] = &pendingRequest{client: client, pdu: pdu, callback: callback}
+	client.pendings[pdu.GetRequestID()] = callback
 
 	_, e = client.conn.Write(bytes)
 	if nil != e {
-		client.safelyKillConnection()
+		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
 		goto failed
 	}
@@ -707,7 +671,7 @@ failed:
 	}
 
 	delete(client.pendings, pdu.GetRequestID())
-	callback(nil, err)
+	callback.reply(nil, err)
 	return
 }
 

@@ -320,6 +320,15 @@ func (pdu *V3PDU) String() string {
 	return buffer.String()
 }
 
+var (
+	context_engine_failed  = newError(SNMP_CODE_FAILED, nil, "copy context_engine failed")
+	context_name_failed    = newError(SNMP_CODE_FAILED, nil, "copy context_name failed")
+	engine_id_failed       = newError(SNMP_CODE_FAILED, nil, "copy engine_id failed")
+	security_model_is_nil  = newError(SNMP_CODE_FAILED, nil, "security model is nil")
+	security_model_failed  = newError(SNMP_CODE_FAILED, nil, "fill security model failed")
+	encode_bindings_failed = newError(SNMP_CODE_FAILED, nil, "fill encode bindings failed")
+)
+
 func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 	var internal C.snmp_pdu_t
 	C.snmp_pdu_init(&internal)
@@ -354,20 +363,20 @@ func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 	} else {
 		err := memcpy(&internal.context_engine[0], SNMP_ENGINE_ID_LEN, pdu.contextEngine)
 		if nil != err {
-			return nil, newError(SNMP_CODE_FAILED, err, "copy context_engine failed")
+			return nil, context_engine_failed //newError(SNMP_CODE_FAILED, err, "copy context_engine failed")
 		}
 		internal.context_engine_len = C.uint32_t(len(pdu.contextEngine))
 	}
 
 	err := strcpy(&internal.context_name[0], SNMP_CONTEXT_NAME_LEN, pdu.contextName)
 	if nil != err {
-		return nil, newError(SNMP_CODE_FAILED, err, "copy context_name failed")
+		return nil, context_name_failed //newError(SNMP_CODE_FAILED, err, "copy context_name failed")
 	}
 
 	if nil != pdu.engine {
 		err = memcpy(&internal.engine.engine_id[0], SNMP_ENGINE_ID_LEN, pdu.engine.engine_id)
 		if nil != err {
-			return nil, newError(SNMP_CODE_FAILED, err, "copy engine_id failed")
+			return nil, engine_id_failed //newError(SNMP_CODE_FAILED, err, "copy engine_id failed")
 		}
 		internal.engine.engine_len = C.uint32_t(len(pdu.engine.engine_id))
 		internal.engine.engine_boots = C.int32_t(pdu.engine.engine_boots)
@@ -381,16 +390,14 @@ func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 
 	internal.security_model = SNMP_SECMODEL_USM
 	if nil == pdu.securityModel {
-		return nil, newError(SNMP_CODE_FAILED, nil, "security model is nil")
+		return nil, security_model_is_nil //newError(SNMP_CODE_FAILED, nil, "security model is nil")
 	}
 	err = pdu.securityModel.Write(&internal.user)
-
 	if nil != err {
 		return nil, newError(SNMP_CODE_FAILED, err, "fill security model failed")
 	}
 
 	err = encodeBindings(&internal, pdu.GetVariableBindings())
-
 	if nil != err {
 		return nil, newError(SNMP_CODE_FAILED, err, "fill encode bindings failed")
 	}

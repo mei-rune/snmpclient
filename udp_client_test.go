@@ -11,7 +11,6 @@ import (
 )
 
 func TestUdpClientTimeout(t *testing.T) {
-
 	var cl Client
 	var e error
 
@@ -37,7 +36,7 @@ func TestUdpClientTimeout(t *testing.T) {
 		return
 	}
 
-	client.lastActive = time.Time{}
+	client.lastAt = time.Time{}
 
 	res, e := client.SendAndRecv(pdu, 2*time.Second)
 	if nil != e {
@@ -48,8 +47,8 @@ func TestUdpClientTimeout(t *testing.T) {
 		t.Logf("sendAndRecv pdu failed - res is nil")
 	}
 
-	if client.lastActive.Add(2 * time.Second).After(time.Now()) {
-		t.Errorf("lastActive failed - expected is %s, actual is %s", time.Now().String(), client.lastActive.String())
+	if client.lastAt.Add(2 * time.Second).After(time.Now()) {
+		t.Errorf("lastAt failed - expected is %s, actual is %s", time.Now().String(), client.lastAt.String())
 		return
 	}
 
@@ -59,11 +58,12 @@ func TestUdpClientTimeout(t *testing.T) {
 		return
 	}
 
-	client.lastActive = client.lastActive.Add(time.Duration(-1**deadTimeout*2) * time.Minute)
+	client.lastAt = client.lastAt.Add(time.Duration(-1**deadTimeout*2) * time.Minute)
 
+	client.fireTick()
 	e = client.Test()
 	if nil == e {
-		t.Errorf("test timeout failed - expected return timeout - %s", client.lastActive.String())
+		t.Errorf("test timeout failed - expected return timeout - %s", client.lastAt.String())
 		return
 	}
 
@@ -98,22 +98,27 @@ func serveTestUdp(in net.PacketConn, pdu_txt string, waiter *sync.WaitGroup) {
 	for {
 		_, addr, err := in.ReadFrom(bytes[:])
 		if nil != err {
-			fmt.Println(err.Error())
+			fmt.Println("[test] read failed", err.Error())
 			break
 		}
 
+		fmt.Println("[test] recv ok, send at next step")
+
 		bin, err := hex.DecodeString(pdu_txt)
 		if nil != err {
-			fmt.Println(err.Error())
+			fmt.Println("[test]", err.Error())
 		} else {
-			in.WriteTo(bin, addr)
+			if _, err = in.WriteTo(bin, addr); nil != err {
+				fmt.Println("[test] write failed", err.Error())
+				break
+			}
 		}
 	}
 }
 
 type callback func(t *testing.T, cl Client, laddr net.Addr)
 
-func TestReturnPdu(t *testing.T) {
+func TestV2ReturnPdu(t *testing.T) {
 	testWith(t, "127.0.0.1:0", "", snmpv1_txt, func(t *testing.T, cl Client, laddr net.Addr) {
 
 		cl.(*UdpClient).next_id = 233
@@ -133,11 +138,12 @@ func TestReturnPdu(t *testing.T) {
 			t.Errorf("sendAndRecv pdu failed - res is nil")
 		}
 
+		fmt.Println("test is end")
 		//cl.FreePDU(pdu, res)
 	})
 }
 
-func TestReturnNoSuchInstancePdu(t *testing.T) {
+func TestV2ReturnNoSuchInstancePdu(t *testing.T) {
 	testWith(t, "127.0.0.1:0", "", snmpv2c_NOSUCHINSTANCE, func(t *testing.T, cl Client, laddr net.Addr) {
 
 		pdu, err := cl.CreatePDU(SNMP_PDU_GET, SNMP_V1)
@@ -164,12 +170,11 @@ func TestReturnNoSuchInstancePdu(t *testing.T) {
 		if SNMP_SYNTAX_NOSUCHINSTANCE != res.GetVariableBindings().Get(0).Value.GetSyntax() {
 			t.Errorf("sendAndRecv pdu failed - res is not NOSUCHINSTANCE")
 		}
-
 		//cl.FreePDU(pdu, res)
 	})
 }
 
-func TestSendFailed(t *testing.T) {
+func TestV2SendFailed(t *testing.T) {
 	testWith(t, "0.0.0.0:0", "33.0.0.0:0", snmpv1_txt, func(t *testing.T, cl Client, laddr net.Addr) {
 
 		cl.(*UdpClient).next_id = 233
@@ -194,7 +199,7 @@ func TestSendFailed(t *testing.T) {
 	})
 }
 
-func TestRecvTimeout(t *testing.T) {
+func TestV2RecvTimeout(t *testing.T) {
 	testWith(t, "127.0.0.1:0", "", snmpv1_txt, func(t *testing.T, cl Client, laddr net.Addr) {
 		pdu, err := cl.CreatePDU(SNMP_PDU_GET, SNMP_V1)
 		if nil != err {
@@ -266,7 +271,7 @@ func testWith(t *testing.T, laddr, caddr, pdu_txt string, f callback) {
 var get_bulk_request_pdu = `303402010104067075626c6963a527020101020100020101301c300c06082b060102010104000500300c06082b060102010105000500`
 var get_bulk_response_pdu = `303d02010104067075626c6963a2300201010201000201003025301206082b0601020101050004066d65692d7063300f06082b060102010106000403616161`
 
-func TestPduGetBulk(t *testing.T) {
+func TestV2PduGetBulk(t *testing.T) {
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
 		var trapError SnmpError
 		var res, req PDU

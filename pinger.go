@@ -10,7 +10,6 @@ package snmpclient
 // #include "bsnmp/gobindings.h"
 import "C"
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -20,7 +19,7 @@ import (
 	"unsafe"
 )
 
-var TimeoutError = errors.New("time out")
+var TimeoutError = newError(SNMP_CODE_TIMEOUT, nil, "time out")
 
 type PingResult struct {
 	Id             int
