@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"expvar"
 	"flag"
 	"fmt"
 	"net"
@@ -52,8 +53,22 @@ func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
 
 var (
 	requests_mutex sync.Mutex
-	requests_cache = newRequestBuffer(make([]*clientRequest, 1000))
+	requests_cache = newRequestBuffer(make([]*clientRequest, 2000))
 )
+
+type requests_cache_exporter struct {
+}
+
+func (self *requests_cache_exporter) String() string {
+	requests_mutex.Lock()
+	size := requests_cache.Size()
+	requests_mutex.Unlock()
+	return fmt.Sprint(size)
+}
+
+func init() {
+	expvar.Publish("udp_request_cache", &requests_cache_exporter{})
+}
 
 func newRequest() *clientRequest {
 	requests_mutex.Lock()
