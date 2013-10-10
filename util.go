@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var TimeoutError = newError(SNMP_CODE_TIMEOUT, nil, "time out")
+
 func NormalizeIP(s string) string {
 	if "" == s {
 		return s
