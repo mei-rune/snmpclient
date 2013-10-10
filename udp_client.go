@@ -53,7 +53,7 @@ func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
 
 var (
 	requests_mutex sync.Mutex
-	requests_cache = newRequestBuffer(make([]*clientRequest, 2000))
+	requests_cache = newRequestBuffer(make([]*clientRequest, 200))
 )
 
 type requests_cache_exporter struct {
