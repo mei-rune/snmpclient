@@ -321,4 +321,6 @@ type Client interface {
 	CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpError)
 	SendAndRecv(req PDU, timeout time.Duration) (PDU, SnmpError)
 	Stats() interface{}
+	IsExpired() bool
+	Close()
 }

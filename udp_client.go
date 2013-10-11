@@ -32,12 +32,13 @@ var (
 // }
 
 type clientRequest struct {
-	c        chan *clientRequest
-	timeout  time.Duration
-	request  PDU
-	response PDU
-	e        SnmpError
-	cb       func(pdu PDU, e SnmpError)
+	c         chan *clientRequest
+	timestamp int64
+	timeout   time.Duration
+	request   PDU
+	response  PDU
+	e         SnmpError
+	cb        func(pdu PDU, e SnmpError)
 }
 
 func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
@@ -56,18 +57,13 @@ var (
 	requests_cache = newRequestBuffer(make([]*clientRequest, 200))
 )
 
-type requests_cache_exporter struct {
-}
-
-func (self *requests_cache_exporter) String() string {
-	requests_mutex.Lock()
-	size := requests_cache.Size()
-	requests_mutex.Unlock()
-	return fmt.Sprint(size)
-}
-
 func init() {
-	expvar.Publish("udp_request_cache", &requests_cache_exporter{})
+	expvar.Publish("udp_request_cache", expvar.Func(func() interface{} {
+		requests_mutex.Lock()
+		size := requests_cache.Size()
+		requests_mutex.Unlock()
+		return size
+	}))
 }
 
 func newRequest() *clientRequest {
@@ -75,9 +71,10 @@ func newRequest() *clientRequest {
 	cached := requests_cache.Pop()
 	requests_mutex.Unlock()
 	if nil != cached {
+		cached.timestamp = time.Now().Unix()
 		return cached
 	}
-	return &clientRequest{c: make(chan *clientRequest, 1)}
+	return &clientRequest{c: make(chan *clientRequest, 1), timestamp: time.Now().Unix()}
 }
 
 func releaseRequest(will_cache *clientRequest) {
@@ -97,21 +94,23 @@ type bytesRequest struct {
 }
 
 type UdpClient struct {
-	DEBUG, ERROR Writer
-	is_closed    int32
-	client_c     chan *clientRequest
-	bytes_c      chan bytesRequest
-	wait         sync.WaitGroup
-	next_id      int
-	host         string
-	logCtx       string
-	engine       snmpEngine
-	conn         *net.UDPConn
-	conn_ok      int32
-	pendings     map[int]*clientRequest
+	DEBUG, ERROR  Writer
+	is_closed     int32
+	wait          sync.WaitGroup
+	client_c      chan *clientRequest
+	bytes_c       chan bytesRequest
+	next_id       int
+	host          string
+	logCtx        string
+	poll_interval time.Duration
+	engine        snmpEngine
+	conn          *net.UDPConn
+	conn_ok       int32
+	pendings      map[int]*clientRequest
 
-	lastAt time.Time
-	isOK   int32
+	lastAt         time.Time
+	is_expired     int32
+	cached_deleted []int
 
 	cached_rlock      sync.Mutex
 	conn_error        error
@@ -120,15 +119,17 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, &nullWriter{}, &fmtWriter{})
+	return NewSnmpClientWith(host, 1*time.Second, &NullWriter{}, &LogWriter{})
 }
 
-func NewSnmpClientWith(host string, debugWriter, errorWriter Writer) (Client, SnmpError) {
+func NewSnmpClientWith(host string, poll_interval time.Duration, debugWriter, errorWriter Writer) (Client, SnmpError) {
 	client := &UdpClient{host: NormalizeAddress(host),
-		lastAt:   time.Now(),
-		isOK:     1,
-		client_c: make(chan *clientRequest),
-		bytes_c:  make(chan bytesRequest, 100)}
+		poll_interval:  poll_interval,
+		lastAt:         time.Now(),
+		is_expired:     1,
+		cached_deleted: make([]int, 256),
+		client_c:       make(chan *clientRequest),
+		bytes_c:        make(chan bytesRequest, 100)}
 
 	client.logCtx = "[snmpclient-" + client.host + "]"
 	client.pendings = make(map[int]*clientRequest)
@@ -179,7 +180,7 @@ func (client *UdpClient) serve() {
 		client.disconnect()
 	}()
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(client.poll_interval)
 	defer ticker.Stop()
 
 	is_running := true
@@ -200,31 +201,31 @@ func (client *UdpClient) serve() {
 			client.fireTick()
 		}
 	}
-
-	next := true
-	for next {
-		select {
-		case request, ok := <-client.client_c:
-			if !ok {
-				next = false
-				break
-			}
-			client.executeRequest(request)
-		default:
-			next = false
-		}
-	}
 }
 
 func (client *UdpClient) fireTick() {
-	if time.Now().After(client.lastAt.Add(time.Duration(*deadTimeout) * time.Minute)) {
-		atomic.StoreInt32(&client.isOK, 0)
+	now := time.Now()
+	if now.After(client.lastAt.Add(time.Duration(*deadTimeout) * time.Minute)) {
+		atomic.StoreInt32(&client.is_expired, 0)
 	} else {
-		atomic.StoreInt32(&client.isOK, 1)
+		atomic.StoreInt32(&client.is_expired, 1)
 	}
 
 	if 1 != atomic.LoadInt32(&client.conn_ok) {
 		client.onDisconnection(nil)
+	} else {
+		now_seconds := now.Unix()
+		deleted := client.cached_deleted
+		for id, cr := range client.pendings {
+			if (now_seconds - int64(cr.timeout.Seconds())) > cr.timestamp {
+				deleted = append(deleted, id)
+				cr.reply(nil, TimeoutError)
+			}
+		}
+
+		for _, id := range deleted {
+			delete(client.pendings, id)
+		}
 	}
 }
 
@@ -253,11 +254,8 @@ func (client *UdpClient) Stats() interface{} {
 	return map[string]interface{}{"pendings_requests": len(client.pendings), "queue": len(client.client_c)}
 }
 
-func (client *UdpClient) Test() error {
-	if 0 == atomic.LoadInt32(&client.isOK) {
-		return errors.New("it is expired.")
-	}
-	return nil
+func (client *UdpClient) IsExpired() bool {
+	return 0 == atomic.LoadInt32(&client.is_expired)
 }
 
 func (client *UdpClient) CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpError) {
@@ -281,29 +279,23 @@ func toSnmpCodeError(e error) SnmpError {
 	return newError(SNMP_CODE_FAILED, e, "")
 }
 
-func (client *UdpClient) SendAndRecv(req PDU, timeout time.Duration) (pdu PDU, err SnmpError) {
+func (client *UdpClient) SendAndRecv(request PDU, timeout time.Duration) (response PDU, e SnmpError) {
 	if timeout > 1*time.Minute {
 		timeout = 1 * time.Minute
 	} else if timeout < 1*time.Second {
 		timeout = 1 * time.Second
 	}
 
-	request := newRequest()
-	request.request = req
-	request.timeout = timeout
+	cr := newRequest()
+	cr.request = request
+	cr.timeout = timeout
+	client.client_c <- cr
 
-	client.handleSend(request, req)
-
-	select {
-	case res := <-request.c:
-		response := res.response
-		e := res.e
-		releaseRequest(res)
-		return response, e
-	case <-time.After(timeout):
-		return nil, TimeoutError
-	}
-	return
+	res := <-cr.c
+	response = res.response
+	e = res.e
+	releaseRequest(res)
+	return response, e
 }
 
 func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDiscoverEngine bool) {

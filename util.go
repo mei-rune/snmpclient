@@ -87,25 +87,25 @@ type Writer interface {
 	Print(v ...interface{})
 }
 
-type nullWriter struct {
+type NullWriter struct {
 }
 
-func (l *nullWriter) IsEnabled() bool { return false }
+func (l *NullWriter) IsEnabled() bool { return false }
 
-func (l *nullWriter) Printf(format string, v ...interface{}) {}
+func (l *NullWriter) Printf(format string, v ...interface{}) {}
 
-func (l *nullWriter) Print(v ...interface{}) {}
+func (l *NullWriter) Print(v ...interface{}) {}
 
-type fmtWriter struct {
+type LogWriter struct {
 }
 
-func (l *fmtWriter) IsEnabled() bool { return true }
+func (l *LogWriter) IsEnabled() bool { return true }
 
-func (l *fmtWriter) Printf(format string, v ...interface{}) {
+func (l *LogWriter) Printf(format string, v ...interface{}) {
 	log.Printf(format, v...)
 }
 
-func (l *fmtWriter) Print(v ...interface{}) {
+func (l *LogWriter) Print(v ...interface{}) {
 	log.Println(v...)
 }
 

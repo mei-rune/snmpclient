@@ -52,17 +52,15 @@ func TestUdpClientTimeout(t *testing.T) {
 		return
 	}
 
-	e = client.Test()
-	if nil != e {
-		t.Errorf("test timeout failed - %s", e.Error())
+	if client.IsExpired() {
+		t.Errorf("test is exprired")
 		return
 	}
 
 	client.lastAt = client.lastAt.Add(time.Duration(-1**deadTimeout*2) * time.Minute)
 
 	client.fireTick()
-	e = client.Test()
-	if nil == e {
+	if !client.IsExpired() {
 		t.Errorf("test timeout failed - expected return timeout - %s", client.lastAt.String())
 		return
 	}
