@@ -20,6 +20,8 @@ import (
 	"unsafe"
 )
 
+const default_timeout = 30 * time.Second
+
 var (
 	maxPDUSize  = flag.Uint("maxPDUSize", 2048, "set max size of pdu")
 	deadTimeout = flag.Int("deadTimeout", 1, "set timeout(Minute) of client to dead")
@@ -80,6 +82,7 @@ func newRequest() *clientRequest {
 func releaseRequest(will_cache *clientRequest) {
 	will_cache.request = nil
 	will_cache.response = nil
+	will_cache.timeout = default_timeout
 	will_cache.e = nil
 	will_cache.cb = nil
 
