@@ -211,7 +211,8 @@ func TestEncodePDU(t *testing.T) {
 	}
 
 	if snmpv1_txt != hex.EncodeToString(bytes) {
-		t.Log(hex.EncodeToString(bytes))
+		t.Log("excepted is", snmpv1_txt)
+		t.Log("actual is", hex.EncodeToString(bytes))
 		t.Errorf("encode v1 pdu faile.")
 	}
 
@@ -224,7 +225,8 @@ func TestEncodePDU(t *testing.T) {
 	}
 
 	if snmpv2c_txt != hex.EncodeToString(bytes) {
-		t.Log(hex.EncodeToString(bytes))
+		t.Log("excepted is", snmpv2c_txt)
+		t.Log("actual is", hex.EncodeToString(bytes))
 		t.Errorf("encode v2 pdu faile.")
 	}
 }
