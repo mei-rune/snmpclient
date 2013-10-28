@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "bsnmp/gobindings.h"
 #include "bsnmp/asn1.h"
 #include "bsnmp/snmp.h"
@@ -93,5 +94,5 @@ void snmp_value_put_uint64_str(snmp_values_t* value, char* s) {
 }
 
 int32_t snmp_value_get_uint64_str(snmp_values_t* value, char* s, int32_t len) {
-  return snprintf(s, len, "%llu", value->counter64);
+  return snprintf(s, len, "%" PRIu64, value->counter64);
 }
