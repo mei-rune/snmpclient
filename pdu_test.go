@@ -228,7 +228,7 @@ func TestEncodePDU(t *testing.T) {
 		t.Log("excepted is", snmpv2c_txt)
 		t.Log("actual is", hex.EncodeToString(bytes))
 
-		error_pdu, _ := DecodePDU(bytes, SNMP_PRIV_NOPRIV, "", false)
+		error_pdu, _ := DecodePDU(bytes, SNMP_PRIV_NOPRIV, nil, false)
 		t.Log(error_pdu.String())
 		t.Errorf("encode v2 pdu faile.")
 	}
