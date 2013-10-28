@@ -575,10 +575,10 @@ func encodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) SnmpError {
 		case SNMP_SYNTAX_TIMETICKS:
 			C.snmp_value_put_uint32(&internal.bindings[i].v, C.uint32_t(vb.Value.GetUint32()))
 		case SNMP_SYNTAX_COUNTER64:
-			s := strconv.FormatUint(vb.Value.GetUint64(), 10)
-			cs := C.CString(s)
-			defer C.free(unsafe.Pointer(cs))
-			C.snmp_value_put_uint64_str(&internal.bindings[i].v, cs)
+			uint64_to_counter64(vb.Value.GetUint64(), &internal.bindings[i].v)
+			//cs := C.CString(s)
+			//defer C.free(unsafe.Pointer(cs))
+			//C.snmp_value_put_uint64_str(&internal.bindings[i].v, cs)
 			//C.snmp_value_put_uint64(&internal.bindings[i].v, C.uint64_t(vb.Value.GetUint64()))
 		default:
 			internal.nbindings = C.u_int(i) + 1 // free
@@ -621,9 +621,7 @@ func decodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) {
 		case SNMP_SYNTAX_TIMETICKS:
 			vbs.AppendWith(oid, NewSnmpTimeticks(uint32(C.snmp_value_get_uint32(&internal.bindings[i].v))))
 		case SNMP_SYNTAX_COUNTER64:
-			bytes := make([]byte, 100)
-			len := int(C.snmp_value_get_uint64_str(&internal.bindings[i].v, (*C.char)(unsafe.Pointer(&bytes[0])), 100))
-			u64, err := strconv.ParseUint(string(bytes[0:len]), 10, 64)
+			u64, err := counter64_to_uint64(&internal.bindings[i].v)
 			if nil != err {
 				panic("read uint64 failed, " + err.Error())
 			}
