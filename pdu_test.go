@@ -227,6 +227,9 @@ func TestEncodePDU(t *testing.T) {
 	if snmpv2c_txt != hex.EncodeToString(bytes) {
 		t.Log("excepted is", snmpv2c_txt)
 		t.Log("actual is", hex.EncodeToString(bytes))
+
+		error_pdu, _ := DecodePDU(bytes, SNMP_PRIV_NOPRIV, "", false)
+		t.Log(error_pdu.String())
 		t.Errorf("encode v2 pdu faile.")
 	}
 }
