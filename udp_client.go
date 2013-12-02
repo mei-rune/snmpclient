@@ -23,7 +23,7 @@ import (
 const default_timeout = 30 * time.Second
 
 var (
-	maxPDUSize  = flag.Uint("maxPDUSize", 2048, "set max size of pdu")
+	maxPDUSize  = flag.Uint("maxPDUSize", 20480, "set max size of pdu")
 	deadTimeout = flag.Int("deadTimeout", 1, "set timeout(Minute) of client to dead")
 
 	disconnectError = errors.New("connection is disconnected.")
