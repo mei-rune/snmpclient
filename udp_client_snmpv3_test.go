@@ -184,9 +184,7 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 		}
 
 		if !strings.Contains(err.Error(), "127.0.0.1:") {
-
 			t.Logf("[WARN]   except throw an send error, actual return %s", err.Error())
-			return
 		}
 
 		listener.Start()
@@ -197,8 +195,6 @@ func TestV3DisconnectAndReconnectWhitv3Pdu(t *testing.T) {
 			return
 		}
 		req.Init(map[string]string{"snmp.secmodel": "usm", "snmp.secname": "mfk1", "snmp.auth_pass": "[md5]mfk123456"})
-
-		fmt.Println("SendAndRecv")
 		res, err = cl.SendAndRecv(req, 2*time.Second)
 		if nil != err {
 			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
