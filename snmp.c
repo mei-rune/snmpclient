@@ -1694,7 +1694,7 @@ static enum snmp_code snmp_check_get_resp(const snmp_pdu_t *resp, const snmp_pdu
 static enum snmp_code snmp_check_getbulk_resp(const snmp_pdu_t *resp, const snmp_pdu_t *req)
 {
     int32_t N, R, M, r;
-	\
+	
     for (N = 0; N < req->error_status; N++) {
         if (asn_is_suboid(&req->bindings[N].oid,
             &resp->bindings[N].oid) == 0)

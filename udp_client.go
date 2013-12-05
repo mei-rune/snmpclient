@@ -57,6 +57,9 @@ func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
 var (
 	requests_mutex sync.Mutex
 	requests_cache = newRequestBuffer(make([]*clientRequest, 200))
+
+	bytes_mutex sync.Mutex
+	bytes_cache = newBytesBuffer(make([][]byte, 50))
 )
 
 func init() {
@@ -64,6 +67,13 @@ func init() {
 		requests_mutex.Lock()
 		size := requests_cache.Size()
 		requests_mutex.Unlock()
+		return size
+	}))
+
+	expvar.Publish("udp_bytes_cache", expvar.Func(func() interface{} {
+		bytes_mutex.Lock()
+		size := bytes_cache.Size()
+		bytes_mutex.Unlock()
 		return size
 	}))
 }
@@ -89,6 +99,22 @@ func releaseRequest(will_cache *clientRequest) {
 	requests_mutex.Lock()
 	requests_cache.Push(will_cache)
 	requests_mutex.Unlock()
+}
+
+func newCachedBytes() []byte {
+	bytes_mutex.Lock()
+	cached := bytes_cache.Pop()
+	bytes_mutex.Unlock()
+	if nil != cached {
+		return cached
+	}
+	return make([]byte, *maxPDUSize)
+}
+
+func releaseCachedBytes(will_cache []byte) {
+	bytes_mutex.Lock()
+	bytes_cache.Push(will_cache)
+	bytes_mutex.Unlock()
 }
 
 type bytesRequest struct {
@@ -197,9 +223,15 @@ func (client *UdpClient) serve() {
 			client.executeRequest(request)
 		case data := <-client.bytes_c:
 			client.handleRecv(data.cached[:data.length])
+
 			client.cached_rlock.Lock()
-			client.cached_readBytes = data.cached
-			client.cached_rlock.Unlock()
+			if nil != client.cached_readBytes {
+				client.cached_rlock.Unlock()
+				releaseCachedBytes(data.cached)
+			} else {
+				client.cached_readBytes = data.cached
+				client.cached_rlock.Unlock()
+			}
 		case <-ticker.C:
 			client.fireTick()
 		}
@@ -478,7 +510,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		client.cached_readBytes = nil
 		client.cached_rlock.Unlock()
 		if nil == bs {
-			bs = make([]byte, *maxPDUSize)
+			bs = newCachedBytes()
 		}
 
 		length, err = conn.Read(bs)

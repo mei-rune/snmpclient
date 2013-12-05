@@ -2,7 +2,6 @@ package snmpclient
 
 import (
 	"encoding/hex"
-	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 type trap_cb func(svr *snmpTestServer, count int, bytes []byte)
 type snmpTestServer struct {
+	t             *testing.T
 	isFirstListen bool
 	origin        string
 	conn          net.PacketConn
@@ -41,10 +41,10 @@ func (svr *snmpTestServer) Start() {
 
 	if nil == svr.listenAddr {
 		in, e = net.ListenPacket("udp", svr.origin)
-		fmt.Println("listen at", svr.origin)
+		svr.t.Log("[test_server]", "listen at", svr.origin)
 	} else {
 		in, e = net.ListenPacket("udp", svr.listenAddr.String())
-		fmt.Println("listen at", svr.listenAddr.String())
+		svr.t.Log("[test_server]", "listen at", svr.listenAddr.String())
 	}
 	if nil != e {
 		panic(e.Error())
@@ -59,9 +59,9 @@ func (svr *snmpTestServer) Start() {
 
 }
 
-func startServer2(laddr string) (*snmpTestServer, error) {
+func startServer2(t *testing.T, laddr string) (*snmpTestServer, error) {
 
-	svr := &snmpTestServer{isFirstListen: true, origin: laddr, waitGroup: &sync.WaitGroup{}}
+	svr := &snmpTestServer{t: t, isFirstListen: true, origin: laddr, waitGroup: &sync.WaitGroup{}}
 	svr.Start()
 
 	return svr, nil
@@ -84,7 +84,7 @@ func serveTestUdp2(svr *snmpTestServer) {
 	for {
 		recv_bytes, addr, err := svr.conn.ReadFrom(bytes[:])
 		if nil != err {
-			fmt.Println(err.Error())
+			svr.t.Log("[test_server]", err.Error())
 			break
 		}
 		svr.recv_pdu = hex.EncodeToString(bytes[0:recv_bytes])
@@ -95,7 +95,7 @@ func serveTestUdp2(svr *snmpTestServer) {
 
 		bin, err := hex.DecodeString(svr.send_pdu)
 		if nil != err {
-			fmt.Println(err.Error())
+			svr.t.Log("[test_server]", err.Error())
 		} else {
 			svr.conn.WriteTo(bin, addr)
 		}
@@ -115,7 +115,7 @@ func testSnmpWith(t *testing.T, laddr, caddr string, f snmpTestServer_callback) 
 		}
 	}()
 
-	listener, err := startServer2(laddr)
+	listener, err := startServer2(t, laddr)
 	if nil != err {
 		t.Errorf("start udp server failed - %s", err.Error())
 		return
