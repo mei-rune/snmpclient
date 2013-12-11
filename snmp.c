@@ -638,7 +638,7 @@ enum snmp_code snmp_pdu_decode_header(asn_buf_t *b, snmp_pdu_t *pdu)
     return (SNMP_CODE_OK);
 }
 
-enum snmp_code snmp_pdu_decode_scoped(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip)
+enum snmp_code snmp_pdu_decode_scoped2(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip, int32_t *ignored)
 {
     u_char type;
     asn_len_t len, trailer;
@@ -714,6 +714,9 @@ enum snmp_code snmp_pdu_decode_scoped(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip
     err = parse_pdus(b, pdu, ip);
     if (ASN_ERR_STOPPED(err))
         return (SNMP_CODE_FAILED);
+    if (ASN_ERR_OK != err) {
+        *ignored = 1;
+    }
 
     if (b->asn_len != 0)
         snmp_error("ignoring trailing junk after pdu");
@@ -723,6 +726,11 @@ enum snmp_code snmp_pdu_decode_scoped(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip
     return (SNMP_CODE_OK);
 }
 
+enum snmp_code snmp_pdu_decode_scoped(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip)
+{
+    int32_t ignored;
+    return snmp_pdu_decode_scoped2(b, pdu, ip, &ignored);
+}
 enum snmp_code snmp_pdu_decode_secmode(asn_buf_t *b, snmp_pdu_t *pdu)
 {
     u_char type;

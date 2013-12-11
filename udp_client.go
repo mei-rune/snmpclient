@@ -555,15 +555,15 @@ func (client *UdpClient) onDisconnection(err error) {
 	client.pendings = make(map[int]*clientRequest)
 }
 
-func (client *UdpClient) handleRecv(bytes []byte) {
+func (client *UdpClient) handleRecv(recv_bytes []byte) {
 	var buffer C.asn_buf_t
 	var pdu C.snmp_pdu_t
 	var result PDU
 	var req *clientRequest
 	var ok bool
 
-	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&bytes[0])))
-	buffer.asn_len = C.size_t(len(bytes))
+	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&recv_bytes[0])))
+	buffer.asn_len = C.size_t(len(recv_bytes))
 
 	err := DecodePDUHeader(&buffer, &pdu)
 	if nil != err {
@@ -601,10 +601,13 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 			goto complete
 		}
 
-		err = DecodePDUBody(&buffer, &pdu)
+		err, ok = DecodePDUBody2(&buffer, &pdu)
 		if nil != err {
 			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			goto complete
+		}
+		if ok {
+			client.ERROR.Print(client.logCtx, "ignored some error", hex.EncodeToString(recv_bytes))
 		}
 
 		if client.DEBUG.IsEnabled() {
@@ -615,10 +618,14 @@ func (client *UdpClient) handleRecv(bytes []byte) {
 		_, err = v3.decodePDU(&pdu)
 		result = &v3
 	} else {
-		err = DecodePDUBody(&buffer, &pdu)
+		err, ok = DecodePDUBody2(&buffer, &pdu)
 		if nil != err {
 			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			return
+		}
+
+		if ok {
+			client.ERROR.Print(client.logCtx, "ignored some error", hex.EncodeToString(recv_bytes))
 		}
 
 		req, ok = client.pendings[int(pdu.request_id)]
@@ -676,7 +683,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 		panic("'callback' is nil")
 	}
 
-	var bytes []byte = nil
+	var send_bytes []byte = nil
 	var err SnmpError = nil
 	var e error = nil
 	client.next_id++
@@ -688,7 +695,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 		goto failed_no_remove_pendings
 	}
 
-	bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
+	send_bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
 	if nil != err {
 		err = newError(err.Code(), err, "encode pdu failed")
 		goto failed
@@ -696,7 +703,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 
 	client.pendings[pdu.GetRequestID()] = callback
 
-	_, e = client.conn.Write(bytes)
+	_, e = client.conn.Write(send_bytes)
 	if nil != e {
 		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
@@ -706,7 +713,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 
 	if client.DEBUG.IsEnabled() {
 		client.DEBUG.Print("snmp - send success, " + pdu.String())
-		client.DEBUG.Print(hex.EncodeToString(bytes))
+		client.DEBUG.Print(hex.EncodeToString(send_bytes))
 	}
 
 	return

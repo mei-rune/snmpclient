@@ -665,30 +665,39 @@ func FillUser(pdu *C.snmp_pdu_t,
 }
 
 func DecodePDUBody(buffer *C.asn_buf_t, pdu *C.snmp_pdu_t) SnmpError {
+	e, _ := DecodePDUBody2(buffer, pdu)
+	return e
+}
+
+func DecodePDUBody2(buffer *C.asn_buf_t, pdu *C.snmp_pdu_t) (SnmpError, bool) {
 	var recv_len C.int32_t
+	var ignored C.int32_t = 0
 	var ret_code uint32
 
 	if C.SNMP_V3 == pdu.version {
 		if C.SNMP_SECMODEL_USM != pdu.security_model {
-			return Errorf(SNMP_CODE_FAILED, "unsupport security model - %d", int(pdu.security_model))
+			return Errorf(SNMP_CODE_FAILED, "unsupport security model - %d", int(pdu.security_model)), false
 		}
 
 		if ret_code = C.snmp_pdu_decode_secmode(buffer, pdu); C.SNMP_CODE_OK != ret_code {
-			return Error(SnmpResult(ret_code), C.GoString(C.snmp_pdu_get_error(pdu, ret_code)))
+			return Error(SnmpResult(ret_code), C.GoString(C.snmp_pdu_get_error(pdu, ret_code))), false
 		}
 	}
 
-	if ret_code = C.snmp_pdu_decode_scoped(buffer, pdu, &recv_len); C.SNMP_CODE_OK != ret_code {
+	if ret_code = C.snmp_pdu_decode_scoped2(buffer, pdu, &recv_len, &ignored); C.SNMP_CODE_OK != ret_code {
 		switch ret_code {
 		case C.SNMP_CODE_BADENC:
 			if C.SNMP_Verr == pdu.version {
-				return Errorf(SNMP_CODE_FAILED, "unsupport security model - %d", int(pdu.security_model))
+				return Errorf(SNMP_CODE_FAILED, "unsupport security model - %d", int(pdu.security_model)), false
 			}
 		}
 
-		return Error(SnmpResult(ret_code), C.GoString(C.snmp_pdu_get_error(pdu, ret_code)))
+		return Error(SnmpResult(ret_code), C.GoString(C.snmp_pdu_get_error(pdu, ret_code))), false
 	}
-	return nil
+	if 1 == ignored {
+		return nil, true
+	}
+	return nil, false
 }
 
 func DecodePDU(bytes []byte, priv_type PrivType, priv_key []byte, is_dump bool) (PDU, SnmpError) {

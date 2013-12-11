@@ -303,6 +303,7 @@ void snmp_pdu_init_secparams(snmp_pdu_t *);
 enum snmp_code snmp_pdu_decode(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *);
 enum snmp_code snmp_pdu_decode_header(asn_buf_t *, snmp_pdu_t *);
 enum snmp_code snmp_pdu_decode_scoped(asn_buf_t *, snmp_pdu_t *, int32_t *);
+enum snmp_code snmp_pdu_decode_scoped2(asn_buf_t *b, snmp_pdu_t *pdu, int32_t *ip, int32_t *ignored);
 enum snmp_code snmp_pdu_encode(snmp_pdu_t *, asn_buf_t *);
 enum snmp_code snmp_pdu_decode_secmode(asn_buf_t *, snmp_pdu_t *);
 
