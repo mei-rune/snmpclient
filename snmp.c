@@ -1797,3 +1797,13 @@ enum snmp_code snmp_pdu_check(const snmp_pdu_t *resp, const snmp_pdu_t *req)
 
     return (ret);
 }
+
+snmp_pdu_t* snmp_pdu_new() {
+    return (snmp_pdu_t*)calloc(1, sizeof(snmp_pdu_t));
+}
+void snmp_pdu_destroy(snmp_pdu_t* pdu) {
+    free(pdu);
+}
+void snmp_pdu_zero(snmp_pdu_t* pdu) {
+    memset(pdu, 0, sizeof(snmp_pdu_t));
+}

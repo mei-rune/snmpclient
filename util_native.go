@@ -5,12 +5,18 @@ package snmpclient
 // #include <string.h>
 // #include <stdlib.h>
 // #include <string.h>
+//
+// #include "bsnmp/config.h"
+// #include <stdlib.h>
+// #include "bsnmp/asn1.h"
+// #include "bsnmp/snmp.h"
 import "C"
 
 import (
 	"errors"
 	"expvar"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -83,4 +89,32 @@ func strcpy(dst *C.char, capacity int, src string) error {
 	C.free(unsafe.Pointer(s))
 	//DecrementMemory()
 	return nil
+}
+
+const pdu_cache_size = 20
+
+var (
+	native_pdu_mutex sync.Mutex
+	native_pdu_cache = newNativePduBuffer(make([]*C.snmp_pdu_t, pdu_cache_size))
+)
+
+func newNativePdu() *C.snmp_pdu_t {
+	native_pdu_mutex.Lock()
+	cached := native_pdu_cache.Pop()
+	native_pdu_mutex.Unlock()
+	if nil != cached {
+		return cached
+	}
+	return C.snmp_pdu_new()
+}
+
+func releaseNativePdu(will_cache *C.snmp_pdu_t) {
+	C.snmp_pdu_zero(will_cache)
+	native_pdu_mutex.Lock()
+	if pdu_cache_size > native_pdu_cache.Size() {
+		native_pdu_cache.Push(will_cache)
+	} else {
+		C.snmp_pdu_destroy(will_cache)
+	}
+	native_pdu_mutex.Unlock()
 }

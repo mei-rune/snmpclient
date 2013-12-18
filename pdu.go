@@ -109,9 +109,12 @@ func (pdu *V2CPDU) String() string {
 }
 
 func (pdu *V2CPDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
-	var internal C.snmp_pdu_t
-	C.snmp_pdu_init(&internal)
-	defer C.snmp_pdu_free(&internal)
+	internal := newNativePdu()
+	C.snmp_pdu_init(internal)
+	defer func() {
+		C.snmp_pdu_free(internal)
+		releaseNativePdu(internal)
+	}()
 
 	if SNMP_PDU_GETBULK == pdu.op {
 		if pdu.variableBindings.Len() < pdu.non_repeaters {
@@ -137,23 +140,23 @@ func (pdu *V2CPDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 	internal.pdu_type = C.u_int(pdu.op)
 	internal.version = uint32(pdu.version)
 
-	err = encodeBindings(&internal, pdu.GetVariableBindings())
+	err = encodeBindings(internal, pdu.GetVariableBindings())
 
 	if nil != err {
 		return nil, newError(SNMP_CODE_FAILED, err, "encode bindings")
 	}
 
 	if is_test {
-		debug_init_secparams(&internal)
+		debug_init_secparams(internal)
 	} else {
-		C.snmp_pdu_init_secparams(&internal)
+		C.snmp_pdu_init_secparams(internal)
 	}
 
 	if is_dump {
-		C.snmp_pdu_dump(&internal)
+		C.snmp_pdu_dump(internal)
 	}
 
-	return encodeNativePdu(bs, &internal)
+	return encodeNativePdu(bs, internal)
 }
 
 func (pdu *V2CPDU) decodePDU(native *C.snmp_pdu_t) (bool, SnmpError) {
@@ -330,9 +333,12 @@ var (
 )
 
 func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
-	var internal C.snmp_pdu_t
-	C.snmp_pdu_init(&internal)
-	defer C.snmp_pdu_free(&internal)
+	internal := newNativePdu()
+	C.snmp_pdu_init(internal)
+	defer func() {
+		C.snmp_pdu_free(internal)
+		releaseNativePdu(internal)
+	}()
 	internal.request_id = C.int32_t(pdu.requestId)
 	internal.pdu_type = C.u_int(pdu.op)
 	internal.version = uint32(SNMP_V3)
@@ -397,21 +403,21 @@ func (pdu *V3PDU) encodePDU(bs []byte, is_dump bool) ([]byte, SnmpError) {
 		return nil, newError(SNMP_CODE_FAILED, err, "fill security model failed")
 	}
 
-	err = encodeBindings(&internal, pdu.GetVariableBindings())
+	err = encodeBindings(internal, pdu.GetVariableBindings())
 	if nil != err {
 		return nil, newError(SNMP_CODE_FAILED, err, "fill encode bindings failed")
 	}
 
 	if is_test {
-		debug_init_secparams(&internal)
+		debug_init_secparams(internal)
 	} else {
-		C.snmp_pdu_init_secparams(&internal)
+		C.snmp_pdu_init_secparams(internal)
 	}
 
 	if is_dump {
-		C.snmp_pdu_dump(&internal)
+		C.snmp_pdu_dump(internal)
 	}
-	return encodeNativePdu(bs, &internal)
+	return encodeNativePdu(bs, internal)
 }
 
 func (pdu *V3PDU) decodePDU(native *C.snmp_pdu_t) (bool, SnmpError) {

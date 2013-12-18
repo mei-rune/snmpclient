@@ -329,6 +329,9 @@ extern void (*snmp_printf)(const char *, ...);
 const char* snmp_get_error(enum snmp_code code);
 const char* snmp_pdu_get_error(snmp_pdu_t *pdu, enum snmp_code code);
 
+snmp_pdu_t* snmp_pdu_new();
+void snmp_pdu_destroy(snmp_pdu_t* pdu);
+void snmp_pdu_zero(snmp_pdu_t* pdu);
 
 /* check wheater the answer is valid or not */
 enum snmp_code snmp_pdu_check(const snmp_pdu_t *_req, const snmp_pdu_t *_resp);

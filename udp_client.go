@@ -59,7 +59,7 @@ var (
 	requests_cache = newRequestBuffer(make([]*clientRequest, 200))
 
 	bytes_mutex sync.Mutex
-	bytes_cache = newBytesBuffer(make([][]byte, 50))
+	bytes_cache = newBytesBuffer(make([][]byte, 10))
 )
 
 func init() {
@@ -278,7 +278,7 @@ func (client *UdpClient) executeRequest(request *clientRequest) {
 			}
 			msg := buffer.String()
 			request.reply(nil, Error(SNMP_CODE_FAILED, msg))
-			client.DEBUG.Print(msg)
+			client.DEBUG.Print(client.logCtx, msg)
 		}
 	}()
 
@@ -342,7 +342,7 @@ func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDisco
 	if !pdu.securityModel.IsLocalize() {
 		if nil == pdu.engine {
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Printf("snmp - send failed, nil == pdu.engine, " + pdu.String())
+				client.DEBUG.Print(client.logCtx, "snmp - send failed, nil == pdu.engine, "+pdu.String())
 			}
 			request.reply(nil, Error(SNMP_CODE_FAILED, "nil == pdu.engine"))
 			return
@@ -369,9 +369,9 @@ func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDisco
 
 			if client.DEBUG.IsEnabled() {
 				if nil != err {
-					client.DEBUG.Printf("[snmpv3] - recv pdu failed, %v", err)
+					client.DEBUG.Print(client.logCtx, "[snmpv3] - recv pdu failed,", err)
 				} else {
-					client.DEBUG.Printf("[snmpv3] - recv pdu success, %v", resp)
+					client.DEBUG.Print(client.logCtx, "[snmpv3] - recv pdu success,", resp)
 				}
 			}
 
@@ -383,7 +383,7 @@ func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDisco
 
 func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
 	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Printf("snmp - discover snmp engine")
+		client.DEBUG.Print(client.logCtx, "snmp - discover snmp engine")
 	}
 
 	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
@@ -419,7 +419,7 @@ func (client *UdpClient) discoverEngineAndSend(request *clientRequest, pdu *V3PD
 			}
 
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Printf("snmp - recv pdu, " + err.Error())
+				client.DEBUG.Print(client.logCtx, "snmp - recv pdu, ", err.Error())
 			}
 			request.reply(nil, err)
 			return
@@ -434,7 +434,7 @@ func (client *UdpClient) discoverEngineAndSend(request *clientRequest, pdu *V3PD
 			}
 
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Printf("snmp - recv pdu, " + err.Error())
+				client.DEBUG.Print(client.logCtx, "snmp - recv pdu,", err.Error())
 			}
 
 			request.reply(nil, err)
@@ -513,6 +513,9 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 			bs = newCachedBytes()
 		}
 
+		if client.DEBUG.IsEnabled() {
+			client.DEBUG.Print(client.logCtx, "snmp - begin read - ", len(bs))
+		}
 		length, err = conn.Read(bs)
 		if 0 != atomic.LoadInt32(&client.is_closed) {
 			break
@@ -527,8 +530,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		}
 
 		if client.DEBUG.IsEnabled() {
-			client.DEBUG.Printf("snmp - read ok")
-			client.DEBUG.Print(hex.EncodeToString(bs[:length]))
+			client.DEBUG.Print(client.logCtx, "snmp - read ok - ", hex.EncodeToString(bs[:length]))
 		}
 
 		client.bytes_c <- bytesRequest{cached: bs, length: length}
@@ -557,32 +559,35 @@ func (client *UdpClient) onDisconnection(err error) {
 
 func (client *UdpClient) handleRecv(recv_bytes []byte) {
 	var buffer C.asn_buf_t
-	var pdu C.snmp_pdu_t
 	var result PDU
 	var req *clientRequest
 	var ok bool
 
+	internal := newNativePdu()
+	C.snmp_pdu_init(internal)
+	defer releaseNativePdu(internal)
+
 	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&recv_bytes[0])))
 	buffer.asn_len = C.size_t(len(recv_bytes))
 
-	err := DecodePDUHeader(&buffer, &pdu)
+	err := DecodePDUHeader(&buffer, internal)
 	if nil != err {
 		client.ERROR.Print(client.logCtx, "decode head of pdu failed", err)
 		return
 	}
-	defer C.snmp_pdu_free(&pdu)
+	defer C.snmp_pdu_free(internal)
 
-	if uint32(SNMP_V3) == pdu.version {
-		req, ok = client.pendings[int(pdu.identifier)]
+	if uint32(SNMP_V3) == internal.version {
+		req, ok = client.pendings[int(internal.identifier)]
 		if !ok {
-			client.ERROR.Print(client.logCtx, "request with requestId was ", int(pdu.identifier), " or ", int(pdu.request_id), " is not exists.")
+			client.ERROR.Print(client.logCtx, "request with requestId was ", int(internal.identifier), " or ", int(internal.request_id), " is not exists.")
 
 			// for i, _ := range client.pendings {
 			// 	client.ERROR.Print(i)
 			// }
 			return
 		}
-		delete(client.pendings, int(pdu.identifier))
+		delete(client.pendings, int(internal.identifier))
 
 		v3old, ok := req.request.(*V3PDU)
 		if !ok {
@@ -594,14 +599,14 @@ func (client *UdpClient) handleRecv(recv_bytes []byte) {
 			err = Error(SNMP_CODE_FAILED, "receive pdu is not usm.")
 			goto complete
 		}
-		err = FillUser(&pdu, usm.auth_proto, usm.localization_auth_key,
+		err = FillUser(internal, usm.auth_proto, usm.localization_auth_key,
 			usm.priv_proto, usm.localization_priv_key)
 		if nil != err {
 			client.ERROR.Print(client.logCtx, "fill user information failed,", err.Error())
 			goto complete
 		}
 
-		err, ok = DecodePDUBody2(&buffer, &pdu)
+		err, ok = DecodePDUBody2(&buffer, internal)
 		if nil != err {
 			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			goto complete
@@ -611,14 +616,14 @@ func (client *UdpClient) handleRecv(recv_bytes []byte) {
 		}
 
 		if client.DEBUG.IsEnabled() {
-			C.snmp_pdu_dump(&pdu)
+			C.snmp_pdu_dump(internal)
 		}
 
 		var v3 V3PDU
-		_, err = v3.decodePDU(&pdu)
+		_, err = v3.decodePDU(internal)
 		result = &v3
 	} else {
-		err, ok = DecodePDUBody2(&buffer, &pdu)
+		err, ok = DecodePDUBody2(&buffer, internal)
 		if nil != err {
 			client.ERROR.Print(client.logCtx, "decode body of pdu failed", err.Error())
 			return
@@ -628,19 +633,19 @@ func (client *UdpClient) handleRecv(recv_bytes []byte) {
 			client.ERROR.Print(client.logCtx, "ignored some error", hex.EncodeToString(recv_bytes))
 		}
 
-		req, ok = client.pendings[int(pdu.request_id)]
+		req, ok = client.pendings[int(internal.request_id)]
 		if !ok {
-			client.ERROR.Print(client.logCtx, "request with requestId was", int(pdu.request_id), "is not exists.")
+			client.ERROR.Print(client.logCtx, "request with requestId was", int(internal.request_id), "is not exists.")
 			return
 		}
-		delete(client.pendings, int(pdu.request_id))
+		delete(client.pendings, int(internal.request_id))
 
 		if client.DEBUG.IsEnabled() {
-			C.snmp_pdu_dump(&pdu)
+			C.snmp_pdu_dump(internal)
 		}
 
 		v2 := &V2CPDU{}
-		_, err = v2.decodePDU(&pdu)
+		_, err = v2.decodePDU(internal)
 		result = v2
 	}
 
@@ -712,8 +717,8 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	}
 
 	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Print("snmp - send success, " + pdu.String())
-		client.DEBUG.Print(hex.EncodeToString(send_bytes))
+		client.DEBUG.Print(client.logCtx, "snmp - send success,", pdu.String())
+		client.DEBUG.Print(client.logCtx, hex.EncodeToString(send_bytes))
 	}
 
 	return
