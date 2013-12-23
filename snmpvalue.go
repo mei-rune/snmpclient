@@ -73,21 +73,21 @@ func NewSnmpValue(s string) (SnmpValue, error) {
 	case "int", "int32", "Int", "Int32", "INT", "INT32":
 		// error pattern: return newSnmpInt32FromString(ss[1])
 		// see http://www.golang.org/doc/go_faq.html#nil_error
-		return newSnmpInt32FromString(ss[1])
+		return NewSnmpInt32FromString(ss[1])
 	case "uint", "uint32", "Uint", "Uint32", "UINT", "UINT32", "gauge", "Gauge", "GAUGE":
-		return newSnmpUint32FromString(ss[1])
+		return NewSnmpUint32FromString(ss[1])
 	case "counter", "Counter", "COUNTER", "counter32", "Counter32", "COUNTER32":
-		return newSnmpCounter32FromString(ss[1])
+		return NewSnmpCounter32FromString(ss[1])
 	case "counter64", "Counter64", "COUNTER64":
-		return newSnmpCounter64FromString(ss[1])
+		return NewSnmpCounter64FromString(ss[1])
 	case "str", "string", "String", "octetstring", "OctetString", "octets", "Octets", "OCTETS":
-		return newSnmpOctetStringFromString(ss[1])
+		return NewSnmpOctetStringFromString(ss[1])
 	case "oid", "Oid", "OID":
-		return newSnmpOidFromString(ss[1])
+		return NewSnmpOidFromString(ss[1])
 	case "ip", "IP", "ipaddress", "IPAddress", "IpAddress":
-		return newSnmpAddressFromString(ss[1])
+		return NewSnmpAddressFromString(ss[1])
 	case "timeticks", "Timeticks", "TIMETICKS":
-		return newSnmpTimeticksFromString(ss[1])
+		return NewSnmpTimeticksFromString(ss[1])
 	}
 
 	return nil, fmt.Errorf("unsupported snmp type -", ss[0])
@@ -282,7 +282,7 @@ func ParseOidFromString(s string) (SnmpOid, error) {
 	return SnmpOid(result), nil
 }
 
-func newSnmpOidFromString(s string) (SnmpValue, error) {
+func NewSnmpOidFromString(s string) (SnmpValue, error) {
 	oid, error := ParseOidFromString(s)
 	if nil == error {
 		return &oid, error
@@ -349,7 +349,7 @@ func NewSnmpInt32(v int32) *SnmpInt32 {
 	return &ret
 }
 
-func newSnmpInt32FromString(s string) (SnmpValue, error) {
+func NewSnmpInt32FromString(s string) (SnmpValue, error) {
 	i, ok := strconv.ParseInt(s, 10, 0)
 	if nil != ok {
 		return nil, fmt.Errorf("int32 style error, value is %s, exception is %s", s, ok.Error())
@@ -417,7 +417,7 @@ func NewSnmpUint32(v uint32) *SnmpUint32 {
 	return &ret
 }
 
-func newSnmpUint32FromString(s string) (SnmpValue, error) {
+func NewSnmpUint32FromString(s string) (SnmpValue, error) {
 	i, ok := strconv.ParseUint(s, 10, 0)
 	if nil != ok {
 		return nil, fmt.Errorf("gauge style error, value is %s, exception is %s", s, ok.Error())
@@ -485,7 +485,7 @@ func NewSnmpCounter32(v uint32) *SnmpCounter32 {
 	return &ret
 }
 
-func newSnmpCounter32FromString(s string) (SnmpValue, error) {
+func NewSnmpCounter32FromString(s string) (SnmpValue, error) {
 	i, ok := strconv.ParseUint(s, 10, 0)
 	if nil != ok {
 		return nil, fmt.Errorf("counter32 style error, value is %s, exception is %s", s, ok.Error())
@@ -553,7 +553,7 @@ func NewSnmpCounter64(v uint64) *SnmpCounter64 {
 	return &ret
 }
 
-func newSnmpCounter64FromString(s string) (SnmpValue, error) {
+func NewSnmpCounter64FromString(s string) (SnmpValue, error) {
 	i, ok := strconv.ParseUint(s, 10, 64)
 	if nil != ok {
 		return nil, fmt.Errorf("counter64 style error, value is %s, exception is %s", s, ok.Error())
@@ -621,7 +621,7 @@ func NewSnmpTimeticks(v uint32) *SnmpTimeticks {
 	return &ret
 }
 
-func newSnmpTimeticksFromString(s string) (SnmpValue, error) {
+func NewSnmpTimeticksFromString(s string) (SnmpValue, error) {
 	i, ok := strconv.ParseUint(s, 10, 64)
 	if nil != ok {
 		return nil, fmt.Errorf("snmpTimeticks style error, value is %s, exception is %s", s, ok.Error())
@@ -791,7 +791,7 @@ func NewSnmpOctetString(v []byte) *SnmpOctetString {
 	return &ret
 }
 
-func newSnmpOctetStringFromString(s string) (SnmpValue, error) {
+func NewSnmpOctetStringFromString(s string) (SnmpValue, error) {
 	bytes, err := hex.DecodeString(s)
 	if nil != err {
 		return nil, err
@@ -864,7 +864,7 @@ func NewSnmpAddress(v []byte) *SnmpAddress {
 	return &ret
 }
 
-func newSnmpAddressFromString(s string) (SnmpValue, error) {
+func NewSnmpAddressFromString(s string) (SnmpValue, error) {
 	addr := net.ParseIP(s)
 	if nil == addr {
 		return nil, fmt.Errorf("SnmpAddress style error, value is %s", s)
