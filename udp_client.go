@@ -123,19 +123,20 @@ type bytesRequest struct {
 }
 
 type UdpClient struct {
-	DEBUG, ERROR  Writer
-	is_closed     int32
-	wait          sync.WaitGroup
-	client_c      chan *clientRequest
-	bytes_c       chan bytesRequest
-	next_id       int
-	host          string
-	logCtx        string
-	poll_interval time.Duration
-	engine        snmpEngine
-	conn          *net.UDPConn
-	conn_ok       int32
-	pendings      map[int]*clientRequest
+	DEBUG, ERROR     Writer
+	is_closed        int32
+	wait             sync.WaitGroup
+	client_c         chan *clientRequest
+	bytes_c          chan bytesRequest
+	next_id          int
+	host             string
+	logCtx           string
+	expired_interval time.Duration
+	poll_interval    time.Duration
+	engine           snmpEngine
+	conn             *net.UDPConn
+	conn_ok          int32
+	pendings         map[int]*clientRequest
 
 	lastAt         time.Time
 	is_expired     int32
@@ -148,14 +149,14 @@ type UdpClient struct {
 }
 
 func NewSnmpClient(host string) (Client, SnmpError) {
-	return NewSnmpClientWith(host, 1*time.Second, &NullWriter{}, &LogWriter{})
+	return NewSnmpClientWith(host, 1*time.Second, time.Duration(*deadTimeout)*time.Minute, &NullWriter{}, &LogWriter{})
 }
 
-func NewSnmpClientWith(host string, poll_interval time.Duration, debugWriter, errorWriter Writer) (Client, SnmpError) {
+func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duration, debugWriter, errorWriter Writer) (Client, SnmpError) {
 	client := &UdpClient{host: NormalizeAddress(host),
 		poll_interval:  poll_interval,
 		lastAt:         time.Now(),
-		is_expired:     1,
+		is_expired:     0,
 		cached_deleted: make([]int, 256),
 		client_c:       make(chan *clientRequest),
 		bytes_c:        make(chan bytesRequest, 100)}
@@ -240,10 +241,10 @@ func (client *UdpClient) serve() {
 
 func (client *UdpClient) fireTick() {
 	now := time.Now()
-	if now.After(client.lastAt.Add(time.Duration(*deadTimeout) * time.Minute)) {
-		atomic.StoreInt32(&client.is_expired, 0)
-	} else {
+	if now.After(client.lastAt.Add(client.expired_interval)) {
 		atomic.StoreInt32(&client.is_expired, 1)
+	} else {
+		atomic.StoreInt32(&client.is_expired, 0)
 	}
 
 	if 1 != atomic.LoadInt32(&client.conn_ok) {
@@ -290,7 +291,7 @@ func (client *UdpClient) Stats() interface{} {
 }
 
 func (client *UdpClient) IsExpired() bool {
-	return 0 == atomic.LoadInt32(&client.is_expired)
+	return 1 == atomic.LoadInt32(&client.is_expired)
 }
 
 func (client *UdpClient) CreatePDU(op SnmpType, version SnmpVersion) (PDU, SnmpError) {
