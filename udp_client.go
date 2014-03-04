@@ -63,14 +63,14 @@ var (
 )
 
 func init() {
-	expvar.Publish("udp_request_cache", expvar.Func(func() interface{} {
+	expvar.Publish("snmp_request_cache", expvar.Func(func() interface{} {
 		requests_mutex.Lock()
 		size := requests_cache.Size()
 		requests_mutex.Unlock()
 		return size
 	}))
 
-	expvar.Publish("udp_bytes_cache", expvar.Func(func() interface{} {
+	expvar.Publish("snmp_bytes_cache", expvar.Func(func() interface{} {
 		bytes_mutex.Lock()
 		size := bytes_cache.Size()
 		bytes_mutex.Unlock()
@@ -154,12 +154,13 @@ func NewSnmpClient(host string) (Client, SnmpError) {
 
 func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duration, debugWriter, errorWriter Writer) (Client, SnmpError) {
 	client := &UdpClient{host: NormalizeAddress(host),
-		poll_interval:  poll_interval,
-		lastAt:         time.Now(),
-		is_expired:     0,
-		cached_deleted: make([]int, 256),
-		client_c:       make(chan *clientRequest),
-		bytes_c:        make(chan bytesRequest, 100)}
+		poll_interval:    poll_interval,
+		expired_interval: expired_interval,
+		lastAt:           time.Now(),
+		is_expired:       0,
+		cached_deleted:   make([]int, 256),
+		client_c:         make(chan *clientRequest),
+		bytes_c:          make(chan bytesRequest, 100)}
 
 	client.logCtx = "[snmpclient-" + client.host + "]"
 	client.pendings = make(map[int]*clientRequest)
