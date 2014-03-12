@@ -45,7 +45,7 @@ type SnmpValue interface {
 	GetString() string
 
 	IsError() bool
-	Error() string
+	ErrorMessage() string
 }
 
 const (
@@ -151,7 +151,7 @@ func (s *SnmpNil) IsError() bool {
 	return false
 }
 
-func (s *SnmpNil) Error() string {
+func (s *SnmpNil) ErrorMessage() string {
 	return notError
 }
 
@@ -250,7 +250,7 @@ func (s *SnmpOid) IsError() bool {
 	return false
 }
 
-func (s *SnmpOid) Error() string {
+func (s *SnmpOid) ErrorMessage() string {
 	return notError
 }
 
@@ -340,7 +340,7 @@ func (v *SnmpInt32) IsError() bool {
 	return false
 }
 
-func (v *SnmpInt32) Error() string {
+func (v *SnmpInt32) ErrorMessage() string {
 	return notError
 }
 
@@ -408,7 +408,7 @@ func (s *SnmpUint32) IsError() bool {
 	return false
 }
 
-func (s *SnmpUint32) Error() string {
+func (s *SnmpUint32) ErrorMessage() string {
 	return notError
 }
 
@@ -476,7 +476,7 @@ func (v *SnmpCounter32) IsError() bool {
 	return false
 }
 
-func (v *SnmpCounter32) Error() string {
+func (v *SnmpCounter32) ErrorMessage() string {
 	return notError
 }
 
@@ -544,7 +544,7 @@ func (v *SnmpCounter64) IsError() bool {
 	return false
 }
 
-func (v *SnmpCounter64) Error() string {
+func (v *SnmpCounter64) ErrorMessage() string {
 	return notError
 }
 
@@ -612,7 +612,7 @@ func (v *SnmpTimeticks) IsError() bool {
 	return false
 }
 
-func (v *SnmpTimeticks) Error() string {
+func (v *SnmpTimeticks) ErrorMessage() string {
 	return notError
 }
 
@@ -782,7 +782,7 @@ func (v *SnmpOctetString) IsError() bool {
 	return false
 }
 
-func (v *SnmpOctetString) Error() string {
+func (v *SnmpOctetString) ErrorMessage() string {
 	return notError
 }
 
@@ -855,7 +855,7 @@ func (v *SnmpAddress) IsError() bool {
 	return false
 }
 
-func (v *SnmpAddress) Error() string {
+func (v *SnmpAddress) ErrorMessage() string {
 	return notError
 }
 
@@ -926,7 +926,7 @@ func (v *SnmpValueError) IsError() bool {
 	return true
 }
 
-func (v *SnmpValueError) Error() string {
+func (v *SnmpValueError) ErrorMessage() string {
 	return v.message
 }
 

@@ -288,7 +288,7 @@ func (client *UdpClient) executeRequest(request *clientRequest) {
 }
 
 func (client *UdpClient) Stats() interface{} {
-	return map[string]interface{}{"pendings_requests": len(client.pendings), "queue": len(client.client_c)}
+	return map[string]interface{}{"id": client.logCtx, "pendings_requests": len(client.pendings), "queue": len(client.client_c)}
 }
 
 func (client *UdpClient) IsExpired() bool {
