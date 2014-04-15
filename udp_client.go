@@ -32,13 +32,18 @@ var (
 // }
 
 type clientRequest struct {
-	c         chan *clientRequest
-	timestamp int64
-	timeout   time.Duration
-	request   PDU
-	response  PDU
-	e         SnmpError
-	cb        func(pdu PDU, e SnmpError)
+	c            chan *clientRequest
+	timestamp    int64
+	timeout      time.Duration
+	resend_count int64
+	request      PDU
+	response     PDU
+	e            SnmpError
+	cb           func(pdu PDU, e SnmpError)
+}
+
+func (cr *clientRequest) resend(client *UdpClient) error {
+	return client.resendPdu(cr.request)
 }
 
 func (cr *clientRequest) reply(pdu PDU, e SnmpError) {
@@ -91,6 +96,7 @@ func releaseRequest(will_cache *clientRequest) {
 	will_cache.request = nil
 	will_cache.response = nil
 	will_cache.timeout = 0
+	will_cache.resend_count = 0
 	will_cache.e = nil
 	will_cache.cb = nil
 
@@ -252,9 +258,21 @@ func (client *UdpClient) fireTick() {
 		now_seconds := now.Unix()
 		deleted := client.cached_deleted
 		for id, cr := range client.pendings {
-			if (now_seconds - int64(cr.timeout.Seconds())) > cr.timestamp {
+			t := now_seconds - cr.timestamp
+			if t > int64(cr.timeout.Seconds()) {
 				deleted = append(deleted, id)
 				cr.reply(nil, TimeoutError)
+			} else if t >= 10 {
+				if client.poll_interval < 5*time.Second {
+					if t < cr.resend_count*5 {
+						continue
+					}
+				}
+				if e := cr.resend(client); nil != e {
+					client.DEBUG.Print(client.logCtx, "resend pdu failed, "+e.Error()+"\r\n"+cr.request.String())
+				}
+
+				cr.resend_count++
 			}
 		}
 
@@ -734,6 +752,27 @@ failed_no_remove_pendings:
 
 	callback.reply(nil, err)
 	return
+}
+
+func (client *UdpClient) resendPdu(pdu PDU) error {
+	var send_bytes []byte = nil
+	var err SnmpError = nil
+	var e error = nil
+
+	send_bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
+	if nil != err {
+		return err
+	}
+
+	_, e = client.conn.Write(send_bytes)
+	if nil != e {
+		client.disconnect()
+		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
+		client.onDisconnection(err)
+		return e
+	}
+
+	return nil
 }
 
 func (client *UdpClient) FreePDU(pdus ...PDU) {

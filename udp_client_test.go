@@ -1,6 +1,7 @@
 package snmpclient
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -91,10 +92,10 @@ func serveTestUdp(in net.PacketConn, pdu_txt string, waiter *sync.WaitGroup) {
 		waiter.Done()
 	}()
 
-	var bytes [10000]byte
+	var byteArray [10000]byte
 
 	for {
-		_, addr, err := in.ReadFrom(bytes[:])
+		_, addr, err := in.ReadFrom(byteArray[:])
 		if nil != err {
 			fmt.Println("[test] read failed", err.Error())
 			break
@@ -275,10 +276,10 @@ func TestV2PduGetBulk(t *testing.T) {
 		var res, req PDU
 		var err error
 
-		listener.TrapWith(func(svr *snmpTestServer, count int, bytes []byte) {
+		listener.TrapWith(func(svr *snmpTestServer, count int, byteArray []byte) {
 			switch count {
 			case 1:
-				if get_bulk_request_pdu != hex.EncodeToString(bytes) {
+				if get_bulk_request_pdu != hex.EncodeToString(byteArray) {
 					trapError = Error(SNMP_CODE_FAILED, "request is error.")
 				}
 				svr.ReturnWith(get_bulk_response_pdu)
@@ -298,6 +299,73 @@ func TestV2PduGetBulk(t *testing.T) {
 		req.GetVariableBindings().AppendWith(SnmpOid{1, 3, 6, 1, 2, 1, 1, 5, 0}, nil)
 
 		res, err = cl.SendAndRecv(req, 10*time.Second)
+		if nil != err {
+			fmt.Printf("sendAndRecv pdu failed - %s\r\n", err.Error())
+			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
+			return
+		}
+
+		if nil != trapError {
+			t.Errorf("sendAndRecv trap failed - %s", trapError.Error())
+			return
+		}
+
+		for _, oid1 := range []string{"1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"} {
+			found := false
+			for _, oid2 := range res.GetVariableBindings().All() {
+				if oid1 == oid2.Oid.GetString() {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("excepted oid is", oid1, "actual is ", res.GetVariableBindings().All())
+			}
+		}
+	})
+}
+
+func TestV2PduResend(t *testing.T) {
+	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
+		var trapError SnmpError
+		var res, req PDU
+		var err error
+		var first_byteArray []byte
+		listener.TrapWith(func(svr *snmpTestServer, count int, byteArray []byte) {
+			switch count {
+			case 1:
+				if get_bulk_request_pdu != hex.EncodeToString(byteArray) {
+					trapError = Error(SNMP_CODE_FAILED, "request is error.")
+				}
+				first_byteArray = byteArray
+			case 2:
+				if get_bulk_request_pdu != hex.EncodeToString(byteArray) {
+					trapError = Error(SNMP_CODE_FAILED, "request is error.")
+				}
+				if !bytes.Equal(first_byteArray, byteArray) {
+					trapError = Error(SNMP_CODE_FAILED, "request content is diff.")
+				}
+			default:
+				if get_bulk_request_pdu != hex.EncodeToString(byteArray) {
+					trapError = Error(SNMP_CODE_FAILED, "request is error.")
+				}
+				if !bytes.Equal(first_byteArray, byteArray) {
+					trapError = Error(SNMP_CODE_FAILED, "request content is diff.")
+				}
+				svr.ReturnWith(get_bulk_response_pdu)
+			}
+		})
+
+		req, err = cl.CreatePDU(SNMP_PDU_GETBULK, SNMP_V2C)
+		if nil != err {
+			fmt.Printf("create pdu failed - %s\r\n", err.Error())
+			t.Errorf("create pdu failed - %s", err.Error())
+			return
+		}
+		req.Init(map[string]string{"snmp.community": "public"})
+		req.GetVariableBindings().AppendWith(SnmpOid{1, 3, 6, 1, 2, 1, 1, 4, 0}, nil)
+		req.GetVariableBindings().AppendWith(SnmpOid{1, 3, 6, 1, 2, 1, 1, 5, 0}, nil)
+
+		res, err = cl.SendAndRecv(req, 20*time.Second)
 		if nil != err {
 			fmt.Printf("sendAndRecv pdu failed - %s\r\n", err.Error())
 			t.Errorf("sendAndRecv pdu failed - %s", err.Error())
