@@ -39,7 +39,6 @@ type V2CPDU struct {
 }
 
 func (pdu *V2CPDU) Init(params map[string]string) SnmpError {
-
 	pdu.maxMsgSize = *maxPDUSize
 	if v, ok := params["snmp.max_msg_size"]; ok {
 		if num, e := strconv.ParseUint(v, 10, 0); nil == e {
@@ -79,8 +78,24 @@ func (pdu *V2CPDU) GetVersion() SnmpVersion {
 	return pdu.version
 }
 
+func (pdu *V2CPDU) SetVersion(v SnmpVersion) {
+	pdu.version = v
+}
+
+func (pdu *V2CPDU) SetType(t SnmpType) {
+	pdu.op = t
+}
+
 func (pdu *V2CPDU) GetType() SnmpType {
 	return pdu.op
+}
+
+func (pdu *V2CPDU) SetMaxMsgSize(size uint) {
+	pdu.maxMsgSize = size
+}
+
+func (pdu *V2CPDU) GetMaxMsgSize() uint {
+	return pdu.maxMsgSize
 }
 
 func (pdu *V2CPDU) GetVariableBindings() *VariableBindings {
@@ -557,8 +572,12 @@ func encodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) SnmpError {
 		case SNMP_SYNTAX_INTEGER:
 			C.snmp_value_put_int32(&internal.bindings[i].v, C.int32_t(vb.Value.GetInt32()))
 		case SNMP_SYNTAX_OCTETSTRING:
-			bytes := vb.Value.GetBytes()
-			C.snmp_value_put_octets(&internal.bindings[i].v, unsafe.Pointer(&bytes[0]), C.u_int(len(bytes)))
+			send_bytes := vb.Value.GetBytes()
+			if nil != send_bytes && 0 != len(send_bytes) {
+				C.snmp_value_put_octets(&internal.bindings[i].v, unsafe.Pointer(&send_bytes[0]), C.u_int(len(send_bytes)))
+			} else {
+				C.snmp_value_put_octets(&internal.bindings[i].v, nil, C.u_int(0))
+			}
 		case SNMP_SYNTAX_OID:
 			err = oidWrite(C.snmp_value_get_oid(&internal.bindings[i].v), vb.Value)
 			if nil != err {
@@ -566,14 +585,14 @@ func encodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) SnmpError {
 				return err
 			}
 		case SNMP_SYNTAX_IPADDRESS:
-			bytes := vb.Value.GetBytes()
-			if 4 != len(bytes) {
+			send_bytes := vb.Value.GetBytes()
+			if 4 != len(send_bytes) {
 				internal.nbindings = C.u_int(i) + 1 // free
 				return Errorf(SNMP_CODE_FAILED, "ip address is error, it's length is %d, excepted length is 4, value is %s",
-					len(bytes), vb.Value.String())
+					len(send_bytes), vb.Value.String())
 			}
-			C.snmp_value_put_ipaddress(&internal.bindings[i].v, C.u_char(bytes[0]),
-				C.u_char(bytes[1]), C.u_char(bytes[2]), C.u_char(bytes[3]))
+			C.snmp_value_put_ipaddress(&internal.bindings[i].v, C.u_char(send_bytes[0]),
+				C.u_char(send_bytes[1]), C.u_char(send_bytes[2]), C.u_char(send_bytes[3]))
 		case SNMP_SYNTAX_COUNTER:
 			C.snmp_value_put_uint32(&internal.bindings[i].v, C.uint32_t(vb.Value.GetUint32()))
 		case SNMP_SYNTAX_GAUGE:
@@ -607,19 +626,19 @@ func decodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) {
 			vbs.AppendWith(oid, NewSnmpInt32(int32(C.snmp_value_get_int32(&internal.bindings[i].v))))
 		case SNMP_SYNTAX_OCTETSTRING:
 			l := int(C.snmp_value_get_octets_len(&internal.bindings[i].v))
-			bytes := make([]byte, l, l+10)
+			send_bytes := make([]byte, l, l+10)
 			if 0 != l {
-				C.snmp_value_get_octets(&internal.bindings[i].v, unsafe.Pointer(&bytes[0]))
+				C.snmp_value_get_octets(&internal.bindings[i].v, unsafe.Pointer(&send_bytes[0]))
 			}
-			vbs.AppendWith(oid, NewSnmpOctetString(bytes))
+			vbs.AppendWith(oid, NewSnmpOctetString(send_bytes))
 		case SNMP_SYNTAX_OID:
 			v := oidRead(C.snmp_value_get_oid(&internal.bindings[i].v))
 			vbs.AppendWith(oid, v)
 		case SNMP_SYNTAX_IPADDRESS:
-			bytes := make([]byte, 4)
+			send_bytes := make([]byte, 4)
 			tmp := C.snmp_value_get_ipaddress(&internal.bindings[i].v)
-			C.memcpy(unsafe.Pointer(&bytes[0]), unsafe.Pointer(tmp), 4)
-			vbs.AppendWith(oid, NewSnmpAddress(bytes))
+			C.memcpy(unsafe.Pointer(&send_bytes[0]), unsafe.Pointer(tmp), 4)
+			vbs.AppendWith(oid, NewSnmpAddress(send_bytes))
 		case SNMP_SYNTAX_COUNTER:
 			vbs.AppendWith(oid, NewSnmpCounter32(uint32(C.snmp_value_get_uint32(&internal.bindings[i].v))))
 		case SNMP_SYNTAX_GAUGE:
@@ -706,12 +725,12 @@ func DecodePDUBody2(buffer *C.asn_buf_t, pdu *C.snmp_pdu_t) (SnmpError, bool) {
 	return nil, false
 }
 
-func DecodePDU(bytes []byte, priv_type PrivType, priv_key []byte, is_dump bool) (PDU, SnmpError) {
+func DecodePDU(send_bytes []byte, priv_type PrivType, priv_key []byte, is_dump bool) (PDU, SnmpError) {
 	var buffer C.asn_buf_t
 	var pdu C.snmp_pdu_t
 
-	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&bytes[0])))
-	buffer.asn_len = C.size_t(len(bytes))
+	C.set_asn_u_ptr(&buffer.asn_u, (*C.char)(unsafe.Pointer(&send_bytes[0])))
+	buffer.asn_len = C.size_t(len(send_bytes))
 
 	err := DecodePDUHeader(&buffer, &pdu)
 	if nil != err {
