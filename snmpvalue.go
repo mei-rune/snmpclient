@@ -273,7 +273,19 @@ func ParseOidFromString(s string) (SnmpOid, error) {
 		} else {
 			num, ok := strconv.ParseUint(v, 10, 0)
 			if nil != ok {
-				return nil, fmt.Errorf("oid style error, value is %s, exception is %s", s, ok.Error())
+				if 0 != i {
+					return nil, fmt.Errorf("oid style error, value is %s, exception is %s", s, ok.Error())
+				}
+				switch v {
+				case "iso":
+					num = 1
+				case "ccitt":
+					num = 2
+				case "iso/ccitt":
+					num = 3
+				default:
+					return nil, fmt.Errorf("oid style error, value is %s, exception is %s", s, ok.Error())
+				}
 			}
 
 			result = append(result, uint32(num))

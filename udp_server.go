@@ -85,7 +85,7 @@ func NewMibTree() *Tree {
 	return NewTree(compareOidAdValue)
 }
 
-type SnmpServer struct {
+type UdpServer struct {
 	name       string
 	origin     string
 	conn       net.PacketConn
@@ -97,8 +97,8 @@ type SnmpServer struct {
 	mibs *Tree
 }
 
-func NewSnmpServerFromFile(nm, addr, file string) (*SnmpServer, error) {
-	srv := &SnmpServer{name: nm,
+func NewUdpServerFromFile(nm, addr, file string) (*UdpServer, error) {
+	srv := &UdpServer{name: nm,
 		origin: addr,
 		mibs:   NewMibTree()}
 	r, e := os.Open(nm)
@@ -117,8 +117,8 @@ func NewSnmpServerFromFile(nm, addr, file string) (*SnmpServer, error) {
 	return srv, srv.start()
 }
 
-func NewSnmpServerFromString(nm, addr, mibs string) (*SnmpServer, error) {
-	srv := &SnmpServer{name: nm,
+func NewUdpServerFromString(nm, addr, mibs string) (*UdpServer, error) {
+	srv := &UdpServer{name: nm,
 		origin: addr,
 		mibs:   NewMibTree()}
 	if e := Read(bytes.NewReader([]byte(mibs)), func(oid SnmpOid, value SnmpValue) error {
@@ -133,7 +133,20 @@ func NewSnmpServerFromString(nm, addr, mibs string) (*SnmpServer, error) {
 	return srv, srv.start()
 }
 
-func (self *SnmpServer) GetPort() string {
+func (self *UdpServer) ReloadMibsFromString(mibs string) error {
+	self.mibs = NewMibTree()
+	if e := Read(bytes.NewReader([]byte(mibs)), func(oid SnmpOid, value SnmpValue) error {
+		if ok := self.mibs.Insert(&OidAndValue{Oid: oid,
+			Value: value}); !ok {
+			return errors.New("insert '" + oid.String() + "' failed.")
+		}
+		return nil
+	}); nil != e {
+		return e
+	}
+	return nil
+}
+func (self *UdpServer) GetPort() string {
 	s := self.listenAddr.String()
 	if i := strings.LastIndex(s, ":"); -1 != i {
 		return s[i+1:]
@@ -141,12 +154,12 @@ func (self *SnmpServer) GetPort() string {
 	return ""
 }
 
-func (self *SnmpServer) Close() {
+func (self *UdpServer) Close() {
 	self.conn.Close()
 	self.waitGroup.Wait()
 }
 
-func (self *SnmpServer) start() error {
+func (self *UdpServer) start() error {
 	var conn net.PacketConn
 	var e error
 
@@ -168,7 +181,7 @@ func (self *SnmpServer) start() error {
 	return nil
 }
 
-func (self *SnmpServer) serve() {
+func (self *UdpServer) serve() {
 	defer func() {
 		self.conn = nil
 		self.waitGroup.Done()
@@ -203,7 +216,7 @@ func (self *SnmpServer) serve() {
 	}
 }
 
-func (self *SnmpServer) on_v2(addr net.Addr, p *V2CPDU, cached_bytes []byte) {
+func (self *UdpServer) on_v2(addr net.Addr, p *V2CPDU, cached_bytes []byte) {
 	res := &V2CPDU{}
 	res.SetVersion(p.GetVersion())
 	res.SetType(SNMP_PDU_RESPONSE) //p.GetType(),
@@ -242,7 +255,7 @@ func (self *SnmpServer) on_v2(addr net.Addr, p *V2CPDU, cached_bytes []byte) {
 	}
 }
 
-func (self *SnmpServer) GetValueByOid(oid SnmpOid) SnmpValue {
+func (self *UdpServer) GetValueByOid(oid SnmpOid) SnmpValue {
 	if v := self.mibs.Get(oid); nil != v {
 		if sv, ok := v.(*OidAndValue); ok {
 			return sv.Value
@@ -252,7 +265,7 @@ func (self *SnmpServer) GetValueByOid(oid SnmpOid) SnmpValue {
 	return nil
 }
 
-func (self *SnmpServer) GetNextValueByOid(oid SnmpOid) (SnmpOid, SnmpValue) {
+func (self *UdpServer) GetNextValueByOid(oid SnmpOid) (SnmpOid, SnmpValue) {
 	it := self.mibs.FindGE(oid)
 	if it.Limit() {
 		return nil, nil

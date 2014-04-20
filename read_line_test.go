@@ -223,7 +223,7 @@ var next_oid_and_value = []struct {
 }
 
 func TestReadFromString(t *testing.T) {
-	srv, e := NewSnmpServerFromString("a", ":", mib_string)
+	srv, e := NewUdpServerFromString("a", ":", mib_string)
 	if nil != e {
 		t.Error(e)
 		return
@@ -297,7 +297,7 @@ func ReadSnmpValue(addr, oid string, action SnmpType) (SnmpValue, error) {
 }
 
 func TestSnmpServer(t *testing.T) {
-	srv, e := NewSnmpServerFromString("a", ":", mib_string)
+	srv, e := NewUdpServerFromString("a", ":", mib_string)
 	if nil != e {
 		t.Error(e)
 		return

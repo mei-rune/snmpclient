@@ -147,8 +147,8 @@ func ReadLine(ss []string, is_end bool) (SnmpOid, SnmpValue, []string, error) {
 				return oid, v, nil, e
 			}
 		}
-
-		return SnmpOid{}, nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, first line is not \"x = t: y\".")
+		return oid, NewSnmpOctetString([]byte(simple_line)), ss[1:], nil
+		//return oid, nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, first line is not \"x = t: y\".")
 	}
 	t := strings.TrimSpace(tv[0])
 	var v SnmpValue
