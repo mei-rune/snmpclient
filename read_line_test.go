@@ -1,6 +1,7 @@
 package snmpclient
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"reflect"
@@ -120,6 +121,29 @@ func TestParseLine(t *testing.T) {
 			t.Errorf("test[%d] failed, remain[%v!=%v] ", idx, r, test.remain)
 		}
 	}
+
+	count := 0
+	if e := Read(bytes.NewReader([]byte(`iso.3.6.1.2.1.10.166.8.1.3.1.8.267 = Hex-STRING: 04 41 0D 01 
+iso.3.6.1.2.1.10.166.8.1.3.1.8.268 = STRING: "
+(d/"
+iso.3.6.1.2.1.10.166.8.1.3.1.8.269 = Hex-STRING: 0A 14 64 0F`)), func(oid SnmpOid, value SnmpValue) error {
+		count++
+		if 1 == count {
+			if "1.3.6.1.2.1.10.166.8.1.3.1.8.267" != oid.GetString() ||
+				"[octets]04410d01" != value.String() {
+				t.Error(oid.String(), value)
+			}
+		} else if 2 == count {
+			if "1.3.6.1.2.1.10.166.8.1.3.1.8.268" != oid.GetString() ||
+				"[octets]0d0a28642f" != value.String() {
+				t.Error(oid.String(), value)
+			}
+		}
+		return nil
+	}); nil != e {
+		t.Error(e)
+	}
+
 }
 
 func isEmpty(a []string) bool {

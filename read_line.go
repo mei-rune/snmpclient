@@ -20,9 +20,10 @@ func ParseString(ss []string, is_end bool, vs string) (SnmpValue, []string, erro
 	if !strings.HasPrefix(simple_line, "\"") {
 		return nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, \"" + simple_line + "\" is not start with \".")
 	}
-	if strings.HasSuffix(simple_line, "\"") {
-		v := NewSnmpOctetString([]byte(simple_line[1 : len(simple_line)-1]))
-		return v, ss[1:], nil
+	if 1 < len(simple_line) {
+		if strings.HasSuffix(simple_line, "\"") {
+			return NewSnmpOctetString([]byte(simple_line[1 : len(simple_line)-1])), ss[1:], nil
+		}
 	}
 
 	p := -1
