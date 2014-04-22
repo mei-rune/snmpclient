@@ -101,7 +101,7 @@ func NewUdpServerFromFile(nm, addr, file string) (*UdpServer, error) {
 	srv := &UdpServer{name: nm,
 		origin: addr,
 		mibs:   NewMibTree()}
-	r, e := os.Open(nm)
+	r, e := os.Open(file)
 	if nil != e {
 		return nil, e
 	}
