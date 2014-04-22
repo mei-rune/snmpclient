@@ -126,7 +126,8 @@ func TestParseLine(t *testing.T) {
 	if e := Read(bytes.NewReader([]byte(`iso.3.6.1.2.1.10.166.8.1.3.1.8.267 = Hex-STRING: 04 41 0D 01 
 iso.3.6.1.2.1.10.166.8.1.3.1.8.268 = STRING: "
 (d/"
-iso.3.6.1.2.1.10.166.8.1.3.1.8.269 = Hex-STRING: 0A 14 64 0F`)), func(oid SnmpOid, value SnmpValue) error {
+iso.3.6.1.2.1.10.166.8.1.3.1.8.269 = Hex-STRING: 0A 14 64 0F 
+iso.3.6.1.2.1.10.166.8.1.3.1.8.270 = STRING: "`)), func(oid SnmpOid, value SnmpValue) error {
 		count++
 		if 1 == count {
 			if "1.3.6.1.2.1.10.166.8.1.3.1.8.267" != oid.GetString() ||
@@ -138,12 +139,27 @@ iso.3.6.1.2.1.10.166.8.1.3.1.8.269 = Hex-STRING: 0A 14 64 0F`)), func(oid SnmpOi
 				"[octets]0d0a28642f" != value.String() {
 				t.Error(oid.String(), value)
 			}
+		} else if 3 == count {
+			if "1.3.6.1.2.1.10.166.8.1.3.1.8.269" != oid.GetString() ||
+				"[octets]0a14640f" != value.String() {
+				t.Error(oid.String(), value)
+			}
+		} else if 4 == count {
+			if "1.3.6.1.2.1.10.166.8.1.3.1.8.270" != oid.GetString() ||
+				"[octets]0d0a" != value.String() {
+				t.Error(oid.String(), value)
+			}
+		} else {
+			t.Error("it is unexcpted.")
 		}
 		return nil
 	}); nil != e {
 		t.Error(e)
 	}
 
+	if 4 != count {
+		t.Error("it is unexcpted.")
+	}
 }
 
 func isEmpty(a []string) bool {
