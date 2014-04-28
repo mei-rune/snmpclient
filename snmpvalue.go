@@ -265,30 +265,44 @@ func ParseOidFromString(s string) (SnmpOid, error) {
 	if 2 > len(ss) {
 		ss = strings.Split(s, "_")
 	}
-	for i, v := range ss {
+	for idx, v := range ss {
 		if 0 == len(v) {
-			if 0 != i {
-				return nil, fmt.Errorf("oid style error, value is %s", s)
+			if 0 != idx {
+				return nil, fmt.Errorf("oid is syntex error, value is %s", s)
 			}
-		} else {
-			num, ok := strconv.ParseUint(v, 10, 0)
-			if nil != ok {
-				if 0 != i {
-					return nil, fmt.Errorf("oid style error, value is %s, exception is %s", s, ok.Error())
-				}
-				switch v {
-				case "iso":
-					num = 1
-				case "ccitt":
-					num = 2
-				case "iso/ccitt":
-					num = 3
-				default:
-					return nil, fmt.Errorf("oid style error, value is %s, exception is %s", s, ok.Error())
-				}
-			}
+			continue
+		}
 
+		num, e := strconv.ParseUint(v, 10, 0)
+		if nil == e {
 			result = append(result, uint32(num))
+			continue
+		}
+		if 0 != idx {
+			return nil, fmt.Errorf("oid is syntex error, value is %s, exception is %s", s, e.Error())
+		}
+
+		switch v {
+		case "iso":
+			result = append(result, uint32(1))
+		case "ccitt":
+			result = append(result, uint32(2))
+		case "iso/ccitt":
+			result = append(result, uint32(3))
+		case "SNMPv2-SMI::zeroDotZero":
+			result = append(result, 0, 0)
+		case "SNMPv2-SMI::internet":
+			result = append(result, 1, 3, 6, 1)
+		case "SNMPv2-SMI::experimental":
+			result = append(result, 1, 3, 6, 1, 3)
+		case "SNMPv2-SMI::private":
+			result = append(result, 1, 3, 6, 1, 4)
+		case "SNMPv2-SMI::enterprises":
+			result = append(result, 1, 3, 6, 1, 4, 1)
+		case "SNMPv2-SMI::security":
+			result = append(result, 1, 3, 6, 1, 5)
+		default:
+			return nil, fmt.Errorf("oid is syntex error, value is %s.", s)
 		}
 	}
 	return SnmpOid(result), nil

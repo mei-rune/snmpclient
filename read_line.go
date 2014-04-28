@@ -12,6 +12,7 @@ import (
 	"unicode"
 )
 
+var empty_line = errors.New("data is empty.")
 var more_line = errors.New("more line")
 var re = regexp.MustCompile(`(iso|\d)(.\d+)*\s=\s.*`)
 
@@ -118,14 +119,25 @@ func ParseHexString(ss []string, is_end bool, vs string) (SnmpValue, []string, e
 	return NewSnmpOctetString(buf.Bytes()), ss[p:], nil
 }
 
-func ReadLine(ss []string, is_end bool) (SnmpOid, SnmpValue, []string, error) {
+func ParseLine(ss []string, is_end bool) (SnmpOid, SnmpValue, []string, error) {
 	// fmt.Println("=====================================")
 	// fmt.Println(strings.Join(ss, "\r\n"))
 	// fmt.Println(is_end)
 	// fmt.Println("-------------------------------------")
 
 	if nil == ss || 0 == len(ss) {
-		return nil, nil, nil, errors.New("data is nil or empty")
+		return nil, nil, nil, errors.New("data is nil or empty.")
+	}
+	for 0 != len(ss) {
+		if "" != ss[0] &&
+			"End of MIB" != ss[0] {
+			break
+		}
+
+		ss = ss[1:]
+	}
+	if nil == ss || 0 == len(ss) {
+		return nil, nil, nil, empty_line
 	}
 	sa := strings.SplitN(ss[0], "=", 2)
 	if 2 != len(sa) {
@@ -215,9 +227,11 @@ func Read(reader io.Reader, cb func(oid SnmpOid, value SnmpValue) error) error {
 		line, e = rd.ReadLine()
 		if io.EOF == e {
 			for nil != s {
-				oid, value, remain, e := ReadLine(append(s, line), true)
+				oid, value, remain, e := ParseLine(append(s, line), true)
 				if nil != e {
-					return e
+					if empty_line != e {
+						return e
+					}
 				}
 
 				if e = cb(oid, value); nil != e {
@@ -237,9 +251,12 @@ func Read(reader io.Reader, cb func(oid SnmpOid, value SnmpValue) error) error {
 		}
 		s = append(s, line)
 	retry:
-		oid, value, remain, e := ReadLine(s, false)
+		oid, value, remain, e := ParseLine(s, false)
 		if nil != e {
 			if more_line == e {
+				continue
+			}
+			if empty_line == e {
 				continue
 			}
 			return e

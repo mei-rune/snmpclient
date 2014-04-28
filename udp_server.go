@@ -94,13 +94,15 @@ type UdpServer struct {
 	priv_type  PrivType
 	priv_key   []byte
 
-	mibs *Tree
+	is_update_mibs bool
+	mibs           *Tree
 }
 
-func NewUdpServerFromFile(nm, addr, file string) (*UdpServer, error) {
+func NewUdpServerFromFile(nm, addr, file string, is_update_mibs bool) (*UdpServer, error) {
 	srv := &UdpServer{name: nm,
-		origin: addr,
-		mibs:   NewMibTree()}
+		origin:         addr,
+		is_update_mibs: is_update_mibs,
+		mibs:           NewMibTree()}
 	r, e := os.Open(file)
 	if nil != e {
 		return nil, e
@@ -108,7 +110,17 @@ func NewUdpServerFromFile(nm, addr, file string) (*UdpServer, error) {
 	if e := Read(r, func(oid SnmpOid, value SnmpValue) error {
 		if ok := srv.mibs.Insert(&OidAndValue{Oid: oid,
 			Value: value}); !ok {
-			return errors.New("insert '" + oid.String() + "' failed.")
+			if srv.is_update_mibs {
+				if ok = srv.mibs.DeleteWithKey(oid); !ok {
+					return errors.New("insert '" + oid.String() + "' failed, delete failed.")
+				}
+				if ok = srv.mibs.Insert(&OidAndValue{Oid: oid,
+					Value: value}); !ok {
+					return errors.New("insert '" + oid.String() + "' failed.")
+				}
+			} else {
+				return errors.New("insert '" + oid.String() + "' failed.")
+			}
 		}
 		return nil
 	}); nil != e {
@@ -117,14 +129,26 @@ func NewUdpServerFromFile(nm, addr, file string) (*UdpServer, error) {
 	return srv, srv.start()
 }
 
-func NewUdpServerFromString(nm, addr, mibs string) (*UdpServer, error) {
+func NewUdpServerFromString(nm, addr, mibs string, is_update_mibs bool) (*UdpServer, error) {
 	srv := &UdpServer{name: nm,
-		origin: addr,
-		mibs:   NewMibTree()}
+		origin:         addr,
+		is_update_mibs: is_update_mibs,
+		mibs:           NewMibTree()}
 	if e := Read(bytes.NewReader([]byte(mibs)), func(oid SnmpOid, value SnmpValue) error {
 		if ok := srv.mibs.Insert(&OidAndValue{Oid: oid,
 			Value: value}); !ok {
-			return errors.New("insert '" + oid.String() + "' failed.")
+
+			if srv.is_update_mibs {
+				if ok = srv.mibs.DeleteWithKey(oid); !ok {
+					return errors.New("insert '" + oid.String() + "' failed, delete failed.")
+				}
+				if ok = srv.mibs.Insert(&OidAndValue{Oid: oid,
+					Value: value}); !ok {
+					return errors.New("insert '" + oid.String() + "' failed.")
+				}
+			} else {
+				return errors.New("insert '" + oid.String() + "' failed.")
+			}
 		}
 		return nil
 	}); nil != e {
@@ -138,7 +162,18 @@ func (self *UdpServer) ReloadMibsFromString(mibs string) error {
 	if e := Read(bytes.NewReader([]byte(mibs)), func(oid SnmpOid, value SnmpValue) error {
 		if ok := self.mibs.Insert(&OidAndValue{Oid: oid,
 			Value: value}); !ok {
-			return errors.New("insert '" + oid.String() + "' failed.")
+
+			if self.is_update_mibs {
+				if ok = self.mibs.DeleteWithKey(oid); !ok {
+					return errors.New("insert '" + oid.String() + "' failed, delete failed.")
+				}
+				if ok = self.mibs.Insert(&OidAndValue{Oid: oid,
+					Value: value}); !ok {
+					return errors.New("insert '" + oid.String() + "' failed.")
+				}
+			} else {
+				return errors.New("insert '" + oid.String() + "' failed.")
+			}
 		}
 		return nil
 	}); nil != e {
