@@ -347,9 +347,14 @@ func (client *UdpClient) SendAndRecv(request PDU, timeout time.Duration) (respon
 	client.client_c <- cr
 
 	res := <-cr.c
+
 	response = res.response
 	e = res.e
-	releaseRequest(res)
+	if nil == e {
+		releaseRequest(res)
+	} else {
+		close(cr.c) // ensure send result failed while timeout is first.
+	}
 	return response, e
 }
 
