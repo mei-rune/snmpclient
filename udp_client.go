@@ -209,6 +209,7 @@ func (client *UdpClient) serve() {
 		if atomic.CompareAndSwapInt32(&client.is_closed, 0, 1) {
 			close(client.client_c)
 		}
+		atomic.StoreInt32(&client.is_expired, 1)
 		client.wait.Done()
 	}()
 
@@ -285,7 +286,7 @@ func (client *UdpClient) fireTick() {
 	}
 }
 
-func safesend(r clientRequest, e error) {
+func safesend(r clientRequest, e SnmpError) {
 	defer func() {
 		recover()
 	}()
