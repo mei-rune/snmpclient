@@ -367,7 +367,7 @@ func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDisco
 	if !pdu.securityModel.IsLocalize() {
 		if nil == pdu.engine {
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Print(client.logCtx, "snmp - send failed, nil == pdu.engine, "+pdu.String())
+				client.DEBUG.Print(client.logCtx, "send pdu failed, nil == pdu.engine, "+pdu.String())
 			}
 			request.reply(nil, Error(SNMP_CODE_FAILED, "nil == pdu.engine"))
 			return
@@ -408,7 +408,7 @@ func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDisco
 
 func (client *UdpClient) discoverEngine(fn func(PDU, SnmpError)) {
 	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Print(client.logCtx, "snmp - discover snmp engine")
+		client.DEBUG.Print(client.logCtx, "discover snmp engine")
 	}
 
 	usm := &USM{auth_proto: SNMP_AUTH_NOAUTH, priv_proto: SNMP_PRIV_NOPRIV}
@@ -444,7 +444,7 @@ func (client *UdpClient) discoverEngineAndSend(request *clientRequest, pdu *V3PD
 			}
 
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Print(client.logCtx, "snmp - recv pdu, ", err.Error())
+				client.DEBUG.Print(client.logCtx, "recv pdu, ", err.Error())
 			}
 			request.reply(nil, err)
 			return
@@ -459,7 +459,7 @@ func (client *UdpClient) discoverEngineAndSend(request *clientRequest, pdu *V3PD
 			}
 
 			if client.DEBUG.IsEnabled() {
-				client.DEBUG.Print(client.logCtx, "snmp - recv pdu,", err.Error())
+				client.DEBUG.Print(client.logCtx, "recv pdu,", err.Error())
 			}
 
 			request.reply(nil, err)
@@ -539,7 +539,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		}
 
 		if client.DEBUG.IsEnabled() {
-			client.DEBUG.Print(client.logCtx, "snmp - begin read - ", len(bs))
+			client.DEBUG.Print(client.logCtx, "begin read pdu - ", len(bs))
 		}
 		length, err = conn.Read(bs)
 		if 0 != atomic.LoadInt32(&client.is_closed) {
@@ -555,7 +555,7 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		}
 
 		if client.DEBUG.IsEnabled() {
-			client.DEBUG.Print(client.logCtx, "snmp - read ok - ", hex.EncodeToString(bs[:length]))
+			client.DEBUG.Print(client.logCtx, "read pdu ok - ", hex.EncodeToString(bs[:length]))
 		}
 
 		client.bytes_c <- bytesRequest{cached: bs, length: length}
@@ -702,7 +702,7 @@ func (client *UdpClient) handleSend(reply *clientRequest, pdu PDU) {
 	return
 failed:
 
-	client.ERROR.Print(client.logCtx, "snmp - send failed, ", err, " - ", pdu)
+	client.ERROR.Print(client.logCtx, "send pdu failed, ", err, " - ", pdu)
 
 	reply.reply(nil, toSnmpCodeError(err))
 	return
@@ -721,7 +721,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 
 	_, ok := client.pendings[pdu.GetRequestID()]
 	if ok {
-		err = Error(SNMP_CODE_FAILED, "identifier is repected.")
+		err = Error(SNMP_CODE_FAILED, "identifier of pdu is repected.")
 		goto failed_no_remove_pendings
 	}
 
@@ -742,7 +742,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	}
 
 	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Print(client.logCtx, "snmp - send success,", pdu.String())
+		client.DEBUG.Print(client.logCtx, "send pdu success,", pdu.String())
 		client.DEBUG.Print(client.logCtx, hex.EncodeToString(send_bytes))
 	}
 
@@ -752,7 +752,7 @@ failed:
 	delete(client.pendings, pdu.GetRequestID())
 failed_no_remove_pendings:
 	if client.ERROR.IsEnabled() {
-		client.ERROR.Print(client.logCtx, "snmp - send failed, ", err, ", ", pdu)
+		client.ERROR.Print(client.logCtx, "send pdu failed, ", err, ", ", pdu)
 	}
 
 	callback.reply(nil, err)
