@@ -556,6 +556,9 @@ func (client *UdpClient) readUDP(conn *net.UDPConn) {
 		if 0 != atomic.LoadInt32(&client.is_closed) {
 			break
 		}
+		if 10 > length {
+			continue
+		}
 
 		if nil != err {
 			client.cached_rlock.Lock()
@@ -594,6 +597,21 @@ func (client *UdpClient) onDisconnection(err error) {
 }
 
 func (client *UdpClient) handleRecv(recv_bytes []byte) {
+	defer func() {
+		if e := recover(); nil != e {
+			var buffer bytes.Buffer
+			buffer.WriteString(fmt.Sprintf("[panic]%v", e))
+			for i := 1; ; i += 1 {
+				_, file, line, ok := runtime.Caller(i)
+				if !ok {
+					break
+				}
+				buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
+			}
+			client.ERROR.Print(client.logCtx, buffer.String())
+		}
+	}()
+
 	var buffer C.asn_buf_t
 	var result PDU
 	var req *clientRequest
