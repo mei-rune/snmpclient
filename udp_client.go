@@ -205,7 +205,10 @@ func (client *UdpClient) serve() {
 			}
 			client.ERROR.Print(client.logCtx, buffer.String())
 		}
-		atomic.StoreInt32(&client.is_closed, 1)
+
+		if atomic.CompareAndSwapInt32(&client.is_closed, 0, 1) {
+			close(client.client_c)
+		}
 		client.wait.Done()
 	}()
 
@@ -282,6 +285,13 @@ func (client *UdpClient) fireTick() {
 	}
 }
 
+func safesend(r clientRequest, e error) {
+	defer func() {
+		recover()
+	}()
+	r.reply(nil, e)
+}
+
 func (client *UdpClient) executeRequest(request *clientRequest) {
 	defer func() {
 		if e := recover(); nil != e {
@@ -295,7 +305,7 @@ func (client *UdpClient) executeRequest(request *clientRequest) {
 				buffer.WriteString(fmt.Sprintf("    %s:%d\r\n", file, line))
 			}
 			msg := buffer.String()
-			request.reply(nil, Error(SNMP_CODE_FAILED, msg))
+			safesend(request, Error(SNMP_CODE_FAILED, msg))
 			client.DEBUG.Print(client.logCtx, msg)
 		}
 	}()
@@ -352,9 +362,9 @@ func (client *UdpClient) SendAndRecv(request PDU, timeout time.Duration) (respon
 	e = res.e
 	if nil == e {
 		releaseRequest(res)
-	} else {
-		close(cr.c) // ensure send result failed while timeout is first.
-	}
+	} // else {
+	//	close(cr.c) // ensure send result failed while timeout is first.
+	//}
 	return response, e
 }
 
