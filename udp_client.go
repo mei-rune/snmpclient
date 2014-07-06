@@ -286,7 +286,7 @@ func (client *UdpClient) fireTick() {
 	}
 }
 
-func safesend(r clientRequest, e SnmpError) {
+func safesend(r *clientRequest, e SnmpError) {
 	defer func() {
 		recover()
 	}()
