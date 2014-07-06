@@ -792,6 +792,9 @@ func (client *UdpClient) resendPdu(pdu PDU) error {
 	var send_bytes []byte = nil
 	var err SnmpError = nil
 	var e error = nil
+	if nil == client.conn {
+		return nil
+	}
 
 	send_bytes, err = EncodePDU(pdu, client.cached_writeBytes, client.DEBUG.IsEnabled())
 	if nil != err {
