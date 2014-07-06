@@ -8,23 +8,23 @@ import (
 	"testing"
 )
 
-type SVTC struct {
+type test_suite struct {
 	raw, to, errorMsg string
 	isNil             bool
 }
 
 func TestSnmp(t *testing.T) {
-	tests := []SVTC{SVTC{raw: "[null]", isNil: true},
-		SVTC{raw: "[int32]12345"},
-		SVTC{raw: "[gauge]2345"},
-		SVTC{raw: "[counter32]4521"},
-		SVTC{raw: "[counter64]342244343333333332"},
-		SVTC{raw: "[octets]" + hex.EncodeToString([]byte("abcdefg"))},
-		SVTC{raw: "[oid]2.3.4.5.6"},
-		SVTC{raw: "[oid].2.3.4.5.6", to: "[oid]2.3.4.5.6"},
-		SVTC{raw: "[oid]_2_3_4_5_6", to: "[oid]2.3.4.5.6"},
-		SVTC{raw: "[ip]1.2.3.4"},
-		SVTC{raw: "[timeticks]343332"}}
+	tests := []test_suite{test_suite{raw: "[null]", isNil: true},
+		test_suite{raw: "[int32]12345"},
+		test_suite{raw: "[gauge]2345"},
+		test_suite{raw: "[counter32]4521"},
+		test_suite{raw: "[counter64]342244343333333332"},
+		test_suite{raw: "[octets]" + hex.EncodeToString([]byte("abcdefg"))},
+		test_suite{raw: "[oid]2.3.4.5.6"},
+		test_suite{raw: "[oid].2.3.4.5.6", to: "[oid]2.3.4.5.6"},
+		test_suite{raw: "[oid]_2_3_4_5_6", to: "[oid]2.3.4.5.6"},
+		test_suite{raw: "[ip]1.2.3.4"},
+		test_suite{raw: "[timeticks]343332"}}
 
 	for _, s := range tests {
 		v, e := NewSnmpValue(s.raw)
@@ -67,20 +67,20 @@ func TestSnmp(t *testing.T) {
 		t.Errorf("ip parse faile. length is not equals 4, len is %d - %s,  %v ", len(ip.GetBytes()), ipaddr.String(), ip.GetBytes())
 	}
 
-	tests = []SVTC{SVTC{raw: "[int32]12a345"},
-		SVTC{raw: "[gauge]23a45"},
-		SVTC{raw: "[counter32]45a21"},
-		SVTC{raw: "[counter64]3422a44343333333332"},
-		SVTC{raw: "[oid]2..3.4.5.6"},
-		SVTC{raw: "[oid].2.3.4.5.a"},
-		SVTC{raw: "[ip]1.a.3.4"},
-		SVTC{raw: "[timeticks]32a3332"}}
+	tests = []test_suite{test_suite{raw: "[int32]12a345"},
+		test_suite{raw: "[gauge]23a45"},
+		test_suite{raw: "[counter32]45a21"},
+		test_suite{raw: "[counter64]3422a44343333333332"},
+		test_suite{raw: "[oid]2..3.4.5.6"},
+		test_suite{raw: "[oid].2.3.4.5.a"},
+		test_suite{raw: "[ip]1.a.3.4"},
+		test_suite{raw: "[timeticks]32a3332"}}
 
 	for _, sv := range tests {
 		nv, e := NewSnmpValue(sv.raw)
 		substr := sv.errorMsg
 		if "" == substr {
-			substr = "style error, value is"
+			substr = "error, value is"
 		}
 
 		if nil == e {

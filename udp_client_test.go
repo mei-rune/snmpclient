@@ -15,7 +15,7 @@ func TestUdpClientTimeout(t *testing.T) {
 	var cl Client
 	var e error
 
-	in, err := net.ListenPacket("udp", ":8324")
+	in, err := net.ListenPacket("udp", "127.0.0.1:8324")
 	if nil != err {
 		t.Errorf("listenAt ':8324' failed - %s", e.Error())
 		return
@@ -174,7 +174,7 @@ func TestV2ReturnNoSuchInstancePdu(t *testing.T) {
 }
 
 func TestV2SendFailed(t *testing.T) {
-	testWith(t, "0.0.0.0:0", "33.0.0.0:0", snmpv1_txt, func(t *testing.T, cl Client, laddr net.Addr) {
+	testWith(t, "127.0.0.1:0", "33.0.0.0:0", snmpv1_txt, func(t *testing.T, cl Client, laddr net.Addr) {
 
 		cl.(*UdpClient).next_id = 233
 		pdu, err := cl.CreatePDU(SNMP_PDU_GET, SNMP_V1)

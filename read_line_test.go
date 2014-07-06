@@ -95,7 +95,7 @@ func TestParseLine(t *testing.T) {
 			value:  "[octets]0001020122021c0422021c048000787d",
 			remain: []string{"iso.3.6.1.2.1.1.2.0 = OID: iso.3.6.1.4.1.6339.1.1.3.4"}},
 	} {
-		oid, v, r, e := ReadLine(test.line, test.is_end)
+		oid, v, r, e := ParseLine(test.line, test.is_end)
 		if oid.String() != test.oid {
 			t.Errorf("test[%d] failed, oid[%v!=%v] ", idx, oid.String(), test.oid)
 		}
@@ -263,7 +263,7 @@ var next_oid_and_value = []struct {
 }
 
 func TestReadFromString(t *testing.T) {
-	srv, e := NewUdpServerFromString("a", ":", mib_string)
+	srv, e := NewUdpServerFromString("a", "127.0.0.1:", mib_string, false)
 	if nil != e {
 		t.Error(e)
 		return
@@ -337,7 +337,7 @@ func ReadSnmpValue(addr, oid string, action SnmpType) (SnmpValue, error) {
 }
 
 func TestSnmpServer(t *testing.T) {
-	srv, e := NewUdpServerFromString("a", ":", mib_string)
+	srv, e := NewUdpServerFromString("a", "127.0.0.1:", mib_string, false)
 	if nil != e {
 		t.Error(e)
 		return
