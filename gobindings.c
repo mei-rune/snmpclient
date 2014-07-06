@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <inttypes.h>
 #include "bsnmp/gobindings.h"
 #include "bsnmp/asn1.h"
