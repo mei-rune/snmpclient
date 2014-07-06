@@ -98,7 +98,7 @@ func TestV3DisconnectWhitv3Pdu(t *testing.T) {
 			return
 		}
 
-		// if !strings.Contains(err.Error(), "127.0.0.1:") {
+		// if !strings.Contains(err.Error(), "127.0.0.1:0") {
 		// 	t.Errorf("except throw an send error, actual return %s", err.Error())
 		// 	return
 		// }
