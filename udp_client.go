@@ -162,7 +162,7 @@ func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duratio
 		expired_interval: expired_interval,
 		lastAt:           time.Now(),
 		is_expired:       0,
-		cached_deleted:   make([]int, 256),
+		cached_deleted:   make([]int, 0, 256),
 		client_c:         make(chan *clientRequest),
 		bytes_c:          make(chan bytesRequest, 100)}
 
@@ -256,7 +256,7 @@ func (client *UdpClient) fireTick() {
 		client.onDisconnection(nil)
 	} else {
 		now_seconds := now.Unix()
-		deleted := client.cached_deleted
+		deleted := client.cached_deleted[0:0]
 		for id, cr := range client.pendings {
 			t := now_seconds - cr.timestamp
 			if t > int64(cr.timeout.Seconds()) {
