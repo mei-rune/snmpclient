@@ -194,7 +194,7 @@ asn_put_temp_header(asn_buf_t *b, u_char type, u_char **ptr)
 	*ptr = b->asn_ptr;
 	if ((ret = asn_put_header(b, type, ASN_MAXLEN)) == ASN_ERR_OK)
 		if(b->asn_ptr != *ptr + TEMP_LEN) {
-			printf("%s - %z - %z\n", "sssssssssssssssssssssssssssssssssssssss - asn_put_temp_header", (size_t)b->asn_ptr,  (size_t)(*ptr + TEMP_LEN));
+			printf("sssssssssssssssssssssssssssssssssssssss - asn_put_temp_header - %zd - %zd\n", (size_t)b->asn_ptr,  (size_t)(*ptr + TEMP_LEN));
 			return (ASN_ERR_EOBUF);
 		}
 	return (ret);
