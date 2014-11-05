@@ -153,6 +153,7 @@ const (
 	SNMP_CODE_SYNTAX_NOSUCHINSTANCE SnmpResult = 17 /* exception */
 	SNMP_CODE_SYNTAX_ENDOFMIBVIEW   SnmpResult = 18 /* exception */
 
+	cSNMP_CODE_ERR_NOERROR       SnmpResult = 18
 	SNMP_CODE_ERR_TOOBIG         SnmpResult = 19
 	SNMP_CODE_ERR_NOSUCHNAME     SnmpResult = 20
 	SNMP_CODE_ERR_BADVALUE       SnmpResult = 21

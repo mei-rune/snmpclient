@@ -94,8 +94,9 @@ type UdpServer struct {
 	priv_type  PrivType
 	priv_key   []byte
 
-	is_update_mibs bool
-	mibs           *Tree
+	return_error_if_oid_not_exists bool
+	is_update_mibs                 bool
+	mibs                           *Tree
 }
 
 func NewUdpServerFromFile(nm, addr, file string, is_update_mibs bool) (*UdpServer, error) {
@@ -155,6 +156,11 @@ func NewUdpServerFromString(nm, addr, mibs string, is_update_mibs bool) (*UdpSer
 		return nil, e
 	}
 	return srv, srv.start()
+}
+
+func (self *UdpServer) ReturnErrorIfOidNotExists(status bool) *UdpServer {
+	self.return_error_if_oid_not_exists = status
+	return self
 }
 
 func (self *UdpServer) ReloadMibsFromString(mibs string) error {
@@ -263,6 +269,10 @@ func (self *UdpServer) on_v2(addr net.Addr, p *V2CPDU, cached_bytes []byte) {
 		for _, vb := range p.GetVariableBindings().All() {
 			v := self.GetValueByOid(vb.Oid)
 			if nil == v {
+				if self.return_error_if_oid_not_exists {
+					res.SetErrorStatus(int32(SNMP_CODE_ERR_NOSUCHNAME) - int32(cSNMP_CODE_ERR_NOERROR))
+					break
+				}
 				continue
 			}
 			res.GetVariableBindings().AppendWith(vb.Oid, v)
