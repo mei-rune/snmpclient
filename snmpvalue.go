@@ -975,3 +975,9 @@ func NewSnmpValueError(value uint) *SnmpValueError {
 func NewSnmpValueErrorWithMessage(value uint, err string) *SnmpValueError {
 	return &SnmpValueError{value: SnmpSyntax(value), message: err}
 }
+
+var (
+	NOSUCHOBJECT   = NewSnmpValueError(uint(SNMP_SYNTAX_NOSUCHOBJECT))
+	NOSUCHINSTANCE = NewSnmpValueError(uint(SNMP_SYNTAX_NOSUCHINSTANCE))
+	ENDOFMIBVIEW   = NewSnmpValueError(uint(SNMP_SYNTAX_ENDOFMIBVIEW))
+)
