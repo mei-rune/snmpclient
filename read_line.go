@@ -130,7 +130,8 @@ func ParseLine(ss []string, is_end bool) (SnmpOid, SnmpValue, []string, error) {
 	}
 	for 0 != len(ss) {
 		if "" != ss[0] &&
-			"End of MIB" != ss[0] {
+			"End of MIB" != ss[0] &&
+			'#' != ss[0][0] {
 			break
 		}
 
