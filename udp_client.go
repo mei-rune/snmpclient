@@ -27,6 +27,11 @@ var (
 	disconnectError = errors.New("connection is disconnected.")
 )
 
+const (
+	PDU_MAX_RID int32 = 32767 ///< max request id to use
+	PDU_MIN_RID int32 = 1000  ///< min request id to use
+)
+
 // type clientReply interface {
 // 	reply(pdu PDU, e SnmpError)
 // }
@@ -132,7 +137,7 @@ type UdpClient struct {
 	wait             sync.WaitGroup
 	client_c         chan *clientRequest
 	bytes_c          chan bytesRequest
-	next_id          int
+	next_id          int32
 	host             string
 	logCtx           string
 	expired_interval time.Duration
@@ -162,6 +167,7 @@ func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duratio
 		expired_interval: expired_interval,
 		lastAt:           time.Now(),
 		is_expired:       0,
+		next_id:          PDU_MIN_RID,
 		cached_deleted:   make([]int, 0, 256),
 		client_c:         make(chan *clientRequest),
 		bytes_c:          make(chan bytesRequest, 100)}
@@ -180,6 +186,10 @@ func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duratio
 	go client.serve()
 	client.wait.Add(1)
 	return client, nil
+}
+
+func (client *UdpClient) SetNextId(next_id int32) {
+	client.next_id = next_id
 }
 
 func (client *UdpClient) Close() {
@@ -746,7 +756,10 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	var err SnmpError = nil
 	var e error = nil
 	client.next_id++
-	pdu.SetRequestID(client.next_id)
+	if client.next_id > PDU_MAX_RID {
+		client.next_id = PDU_MIN_RID + 1
+	}
+	pdu.SetRequestID(int(client.next_id))
 
 	_, ok := client.pendings[pdu.GetRequestID()]
 	if ok {
@@ -771,8 +784,7 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 	}
 
 	if client.DEBUG.IsEnabled() {
-		client.DEBUG.Print(client.logCtx, "send pdu success,", pdu.String())
-		client.DEBUG.Print(client.logCtx, hex.EncodeToString(send_bytes))
+		client.DEBUG.Print(client.logCtx, "send pdu success,", pdu.String(), "--", hex.EncodeToString(send_bytes))
 	}
 
 	return
