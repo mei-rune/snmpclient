@@ -41,7 +41,7 @@ func (svr *snmpTestServer) Start() {
 
 	if nil == svr.listenAddr {
 		in, e = net.ListenPacket("udp", svr.origin)
-		svr.t.Log("[test_server]", "listen at", svr.origin)
+		svr.t.Log("[test_server]", "listen at", in.LocalAddr())
 	} else {
 		in, e = net.ListenPacket("udp", svr.listenAddr.String())
 		svr.t.Log("[test_server]", "listen at", svr.listenAddr.String())
