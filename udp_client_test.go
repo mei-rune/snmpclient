@@ -144,6 +144,7 @@ func TestV2ReturnPdu(t *testing.T) {
 
 func TestV2ReturnNoSuchInstancePdu(t *testing.T) {
 	testWith(t, "127.0.0.1:0", "", snmpv2c_NOSUCHINSTANCE, func(t *testing.T, cl Client, laddr net.Addr) {
+		cl.(*UdpClient).SetNextId(0)
 
 		pdu, err := cl.CreatePDU(SNMP_PDU_GET, SNMP_V1)
 		if nil != err {
@@ -272,6 +273,8 @@ var get_bulk_response_pdu = `303d02010104067075626c6963a230020101020100020100302
 
 func TestV2PduGetBulk(t *testing.T) {
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
+		cl.(*UdpClient).SetNextId(0)
+
 		var trapError SnmpError
 		var res, req PDU
 		var err error
@@ -326,6 +329,8 @@ func TestV2PduGetBulk(t *testing.T) {
 
 func TestV2PduResend(t *testing.T) {
 	testSnmpWith(t, "127.0.0.1:0", "", func(t *testing.T, cl Client, listener *snmpTestServer) {
+		cl.(*UdpClient).SetNextId(0)
+
 		var trapError SnmpError
 		var res, req PDU
 		var err error
