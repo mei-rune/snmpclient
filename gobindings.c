@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <errno.h>
 #include "bsnmp/gobindings.h"
 #include "bsnmp/asn1.h"
 #include "bsnmp/snmp.h"
@@ -89,9 +90,57 @@ uint64_t snmp_value_get_uint64(snmp_values_t* value) {
   return value->counter64;
 }
 
+
+// it is fix tdm-gcc
+uint64_t self_strtoull(const char * p, char * * endp, int base)
+{
+  uint64_t result, maxres;
+  int i = 0;
+  char c = p[i++];
+
+  if (!base) {
+    if (c == '0') {
+      if (p[i] == 'x' || p[i] == 'X') {
+        base = 16; i++;
+      }
+      else
+        base = 8;
+      c = p[i++];
+    }
+    else
+      base = 10;
+  }
+
+  result = 0;
+  maxres = ~(uint64_t)0 / (unsigned)base;
+  for (;;) {
+    unsigned digit;
+    if ('0' <= c && c <= '9')
+      digit = c - '0';
+    else if ('A' <= c && c <= 'Z')
+      digit = c - 'A' + 10;
+    else if ('a' <= c && c <= 'z')
+      digit = c - 'a' + 10;
+    else
+      break;
+    if (digit >= (unsigned)base)
+      break;
+    if (!(   result < maxres
+          || (result == maxres && digit <= ~(uint64_t)0 % (unsigned)base))) {
+      result = ~(uint64_t)0; errno = ERANGE; // return on overflow
+      break;
+    }
+    result = result * (unsigned)base + digit;
+    c = p[i++];
+  }
+  if (endp)
+    *endp = (char *)p + i - 1;
+  return result;
+}
+
 void snmp_value_put_uint64_str(snmp_values_t* value, char* s) {
   char* endptr;
-  value->counter64 = strtoull(s, &endptr, 10);
+  value->counter64 = self_strtoull(s, &endptr, 10);
 }
 
 int32_t snmp_value_get_uint64_str(snmp_values_t* value, char* s, int32_t len) {
