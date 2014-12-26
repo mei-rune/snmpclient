@@ -234,6 +234,55 @@ func TestEncodePDU(t *testing.T) {
 	}
 }
 
+func TestEncodeAndDecodePDU(t *testing.T) {
+	bs := make([]byte, 1024)
+	pdu1 := &V2CPDU{version: SNMP_V1, requestId: 234}
+	pdu1.Init(map[string]string{"snmp.community": "123987"})
+	fillPdu(pdu1.GetVariableBindings())
+	AppendBindings(pdu1.GetVariableBindings(), "[counter64]213054570931")
+
+	bytes1, e := pdu1.encodePDU(bs, *dump_pdu)
+	if nil != e {
+		t.Errorf("encode v1 pdu faile - %s", e.Error())
+		return
+	}
+
+	pdu2, e := DecodePDU(bytes1, SNMP_PRIV_NOPRIV, nil, true)
+	if nil != e {
+		t.Errorf("decode v1 pdu faile - %s", e.Error())
+		return
+	}
+
+	bytes2, e := pdu2.(*V2CPDU).encodePDU(make([]byte, 1024), *dump_pdu)
+	if nil != e {
+		t.Errorf("encode v1 pdu faile - %s", e.Error())
+		return
+	}
+
+	if hex.EncodeToString(bytes1) != hex.EncodeToString(bytes2) {
+		t.Log("excepted is", pdu1)
+		t.Log("actual is", pdu2)
+	}
+	vbs1 := pdu1.GetVariableBindings()
+	vbs2 := pdu2.GetVariableBindings()
+	for idx, vb1 := range vbs1.All() {
+		vb2 := vbs2.Get(idx)
+		if vb1.Oid.String() != vb2.Oid.String() {
+			t.Error("excepted is", pdu1)
+			t.Error("actual is", pdu2)
+			return
+		}
+
+		if vb1.Value.String() != vb2.Value.String() {
+			t.Error("excepted is", pdu1)
+			t.Error("actual is", pdu2)
+			return
+		}
+	}
+
+	t.Log("=========")
+}
+
 func TestEncodeV3PDU(t *testing.T) {
 	testEncodeV3PDU(t, map[string]string{"community": "123987",
 		"snmp.identifier":     "0",

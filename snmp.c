@@ -48,9 +48,8 @@
 #include <assert.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
-#elif defined(HAVE_INTTYPES_H)
-#include <inttypes.h>
 #endif
+#include <inttypes.h>
 #include <string.h>
 #include <ctype.h>
 #ifndef _WIN32
@@ -1160,7 +1159,7 @@ static void dump_binding(const snmp_value_t *b)
         break;
 
     case SNMP_SYNTAX_COUNTER64:
-        snmp_printf("COUNTER64 %lld", b->v.counter64);
+        snmp_printf("COUNTER64 %" PRIu64, b->v.counter64);
         break;
 
     case SNMP_SYNTAX_NOSUCHOBJECT:

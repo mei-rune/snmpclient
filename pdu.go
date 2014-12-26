@@ -640,7 +640,6 @@ func encodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) SnmpError {
 }
 
 func decodeBindings(internal *C.snmp_pdu_t, vbs *VariableBindings) {
-
 	for i := 0; i < int(internal.nbindings); i++ {
 		oid := *oidRead(&internal.bindings[i].oid)
 
