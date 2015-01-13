@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	community  = flag.String("community", "", "set the community string")
-	version    = flag.String("version", "v1", "specifies SNMP version to use")
-	request_id = flag.String("request_id", "", "specifies request id to use")
-	timeout    = flag.Duration("timeout", 10*time.Second, "set the request timeout")
+	community   = flag.String("community", "", "set the community string")
+	version     = flag.String("version", "v1", "specifies SNMP version to use")
+	request_id  = flag.String("request_id", "", "specifies request id to use")
+	timeout     = flag.Duration("timeout", 10*time.Second, "set the request timeout")
+	listen_mode = flag.Bool("listen_mode", false, "use listen mode.")
 )
 
 func main() {
@@ -41,6 +42,10 @@ func main() {
 		return
 	}
 	defer cl.Close()
+
+	if *listen_mode {
+		cl.(*UdpClient).UseListenMode()
+	}
 
 	ver, e := ParseSnmpVersion(*version)
 	if nil != e {

@@ -13,7 +13,9 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,13 +26,64 @@ var (
 	maxPDUSize  = flag.Uint("maxPDUSize", 20480, "set max size of pdu")
 	deadTimeout = flag.Int("deadTimeout", 1, "set timeout(Minute) of client to dead")
 
-	disconnectError = errors.New("connection is disconnected.")
+	snmp_agents_by_listen = flag.String("snmp_agents_by_listen_mode", "", "use listen mode for the snmp agents.")
+	disconnectError       = errors.New("connection is disconnected.")
+
+	all_snmp_agents_by_listen = map[string]string{}
+
+	use_listen_mode = flag.Bool("use_listen_mode", false, "use listen mode.")
 )
 
 const (
 	PDU_MAX_RID int32 = 32767 ///< max request id to use
 	PDU_MIN_RID int32 = 1000  ///< min request id to use
 )
+
+func init() {
+	ip_list := strings.Split(*snmp_agents_by_listen, ",")
+	if 0 == len(ip_list) {
+		for _, ip := range ip_list {
+			all_snmp_agents_by_listen[ip] = ip
+		}
+	}
+
+	ip_list = strings.Split(os.Getenv("snmp_agents_by_listen_mode"), ",")
+	if 0 == len(ip_list) {
+		for _, ip := range ip_list {
+			all_snmp_agents_by_listen[ip] = ip
+		}
+	}
+}
+
+func UseListenModeAll() {
+	flag.Set("use_listen_mode", "true")
+}
+
+func NotUseListenModeAll() {
+	flag.Set("use_listen_mode", "false")
+}
+
+func UseListenMode(ip string) {
+	if strings.HasPrefix(ip, "[") {
+		if idx := strings.IndexRune(ip, ']'); 0 > idx {
+			ip = ip[:idx+1]
+		}
+	} else if idx := strings.IndexRune(ip, ':'); 0 > idx {
+		ip = ip[:idx]
+	}
+	all_snmp_agents_by_listen[ip] = ip
+}
+
+func NotUseListenMode(ip string) {
+	if strings.HasPrefix(ip, "[") {
+		if idx := strings.IndexRune(ip, ']'); 0 > idx {
+			ip = ip[:idx+1]
+		}
+	} else if idx := strings.IndexRune(ip, ':'); 0 > idx {
+		ip = ip[:idx]
+	}
+	delete(all_snmp_agents_by_listen, ip)
+}
 
 // type clientReply interface {
 // 	reply(pdu PDU, e SnmpError)
@@ -138,8 +191,10 @@ type UdpClient struct {
 	client_c         chan *clientRequest
 	bytes_c          chan bytesRequest
 	next_id          int32
+	is_listen_mode   bool
 	host             string
 	logCtx           string
+	peer_addr        net.UDPAddr
 	expired_interval time.Duration
 	poll_interval    time.Duration
 	engine           snmpEngine
@@ -181,11 +236,27 @@ func NewSnmpClientWith(host string, poll_interval, expired_interval time.Duratio
 		client.engine.max_msg_size = uint(*maxPDUSize)
 	}
 
+	addr, err := net.ResolveUDPAddr("udp", client.host)
+	if nil != err {
+		return nil, newError(SNMP_CODE_FAILED, err, "parse address failed")
+	}
+	client.peer_addr = *addr
+
+	if *use_listen_mode {
+		client.is_listen_mode = true
+	} else if _, ok := all_snmp_agents_by_listen[client.peer_addr.IP.String()]; ok {
+		client.is_listen_mode = true
+	}
+
 	client.cached_writeBytes = make([]byte, int(client.engine.max_msg_size))
 
 	go client.serve()
 	client.wait.Add(1)
 	return client, nil
+}
+
+func (client *UdpClient) UseListenMode() {
+	client.is_listen_mode = true
 }
 
 func (client *UdpClient) SetNextId(next_id int32) {
@@ -507,12 +578,12 @@ func (client *UdpClient) connect() SnmpError {
 		client.conn = nil
 		client.onDisconnection(nil)
 	}
-
-	addr, err := net.ResolveUDPAddr("udp", client.host)
-	if nil != err {
-		return newError(SNMP_CODE_FAILED, err, "parse address failed")
+	var err error
+	if client.is_listen_mode {
+		client.conn, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero})
+	} else {
+		client.conn, err = net.DialUDP("udp", nil, &client.peer_addr)
 	}
-	client.conn, err = net.DialUDP("udp", nil, addr)
 	if nil != err {
 		return newError(SNMP_CODE_FAILED, err, "bind udp port failed")
 	}
@@ -525,8 +596,8 @@ func (client *UdpClient) connect() SnmpError {
 func (client *UdpClient) disconnect() {
 	defer func() {
 		client.conn = nil
-		if err := recover(); nil != err {
-			client.DEBUG.Print(client.logCtx, err)
+		if o := recover(); nil != o {
+			client.DEBUG.Print(client.logCtx, "[panic] failed to close the udp connection,", o)
 		}
 	}()
 	if nil != client.conn {
@@ -775,7 +846,11 @@ func (client *UdpClient) sendPdu(pdu PDU, callback *clientRequest) {
 
 	client.pendings[pdu.GetRequestID()] = callback
 
-	_, e = client.conn.Write(send_bytes)
+	if client.is_listen_mode {
+		_, e = client.conn.WriteToUDP(send_bytes, &client.peer_addr)
+	} else {
+		_, e = client.conn.Write(send_bytes)
+	}
 	if nil != e {
 		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
