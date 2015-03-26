@@ -142,6 +142,12 @@ func ParseLine(ss []string, is_end bool) (SnmpOid, SnmpValue, []string, error) {
 	}
 	sa := strings.SplitN(ss[0], "=", 2)
 	if 2 != len(sa) {
+		if strings.Contains(ss[0], "MIB search path") ||
+			strings.Contains(ss[0], "Cannot find module") {
+			return nil, nil, nil, empty_line
+		}
+		//MIB search path: c:/usr/share/snmp/mibs
+		//Cannot find module (abc): At line 0 in (none)
 		return nil, nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, first line is not \"x = y\".")
 	}
 	oid_str := strings.TrimSpace(strings.Replace(sa[0], "iso", "1", 1))
