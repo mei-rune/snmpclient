@@ -236,9 +236,11 @@ func Read(reader io.Reader, cb func(oid SnmpOid, value SnmpValue) error) error {
 			for nil != s {
 				oid, value, remain, e := ParseLine(append(s, line), true)
 				if nil != e {
-					if empty_line != e {
-						return e
+					if empty_line == e {
+						s = remain
+						continue
 					}
+					return e
 				}
 
 				if e = cb(oid, value); nil != e {
@@ -264,6 +266,7 @@ func Read(reader io.Reader, cb func(oid SnmpOid, value SnmpValue) error) error {
 				continue
 			}
 			if empty_line == e {
+				s = remain
 				continue
 			}
 			return e

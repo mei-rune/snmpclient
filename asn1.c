@@ -642,14 +642,6 @@ asn_put_objid(asn_buf_t *b, const asn_oid_t *oid)
 		err = ASN_ERR_RANGE;
 		first = 0;
 		oidlen = 2;
-	} else if (oid->len == 1) {
-		/* illegal */
-		asn_error(b, "short oid");
-		if (oid->subs[0] > 2)
-			asn_error(NULL, "oid[0] too large (%u)", oid->subs[0]);
-		err = ASN_ERR_RANGE;
-		first = oid->subs[0] * 40;
-		oidlen = 2;
 	} else {
 		if (oid->len > ASN_MAXOIDLEN) {
 			asn_error(NULL, "oid too long %u", oid->len);
@@ -1018,7 +1010,8 @@ asn_error_func(const asn_buf_t *b, const char *err, ...)
 	va_end(ap);
 
 	if (b != NULL) {
-		fprintf(stderr, " at");
+		// ThrowException();
+		fprintf(stderr, " at (len is %d):",  b->asn_len);
 		for (i = 0; b->asn_len > i; i++)
 			fprintf(stderr, " %02x", b->asn_cptr[i]);
 	}

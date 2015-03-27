@@ -43,6 +43,11 @@ func DecrementMemory() {
 	atomic.AddInt32(&malloc_count, -1)
 }
 
+//export ThrowException
+func ThrowException() {
+	panic("error")
+}
+
 func memcpy(dst *C.uint8_t, capacity int, src []byte) error {
 	if 0 == len(src) {
 		return nil
