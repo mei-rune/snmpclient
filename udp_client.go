@@ -437,7 +437,6 @@ func (client *UdpClient) SendAndRecv(request PDU, timeout time.Duration) (respon
 	cr.request = request
 	cr.timeout = timeout
 	client.client_c <- cr
-
 	res := <-cr.c
 
 	response = res.response
@@ -448,6 +447,42 @@ func (client *UdpClient) SendAndRecv(request PDU, timeout time.Duration) (respon
 	//	close(cr.c) // ensure send result failed while timeout is first.
 	//}
 	return response, e
+}
+
+func (client *UdpClient) SendAndRecvWithSelect(request PDU, timeout time.Duration) (response PDU, e SnmpError) {
+	if timeout > 1*time.Minute {
+		timeout = 1 * time.Minute
+	} else if 0 >= timeout {
+		timeout = 30 * time.Second
+	} else if timeout < 1*time.Second {
+		timeout = 1 * time.Second
+	}
+
+	cr := newRequest()
+	cr.request = request
+	cr.timeout = timeout
+
+	timer := time.NewTimer(timeout)
+	select {
+	case client.client_c <- cr:
+	case <-timer.C:
+		return nil, timeoutError
+	}
+
+	select {
+	case res := <-cr.c:
+		timer.Stop()
+
+		response := res.response
+		e := res.e
+		if nil == e {
+			releaseClientRequest(res)
+		}
+		return response, e
+	case <-timer.C:
+		atomic.StoreInt32(&cr.is_cancelled, 1)
+		return nil, timeoutError
+	}
 }
 
 func (client *UdpClient) sendV3PDU(request *clientRequest, pdu *V3PDU, autoDiscoverEngine bool) {
