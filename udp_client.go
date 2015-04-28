@@ -466,7 +466,7 @@ func (client *UdpClient) SendAndRecvWithSelect(request PDU, timeout time.Duratio
 	select {
 	case client.client_c <- cr:
 	case <-timer.C:
-		return nil, timeoutError
+		return nil, TimeoutError
 	}
 
 	select {
@@ -476,12 +476,11 @@ func (client *UdpClient) SendAndRecvWithSelect(request PDU, timeout time.Duratio
 		response := res.response
 		e := res.e
 		if nil == e {
-			releaseClientRequest(res)
+			releaseRequest(res)
 		}
 		return response, e
 	case <-timer.C:
-		atomic.StoreInt32(&cr.is_cancelled, 1)
-		return nil, timeoutError
+		return nil, TimeoutError
 	}
 }
 
