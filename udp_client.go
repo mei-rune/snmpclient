@@ -922,7 +922,11 @@ func (client *UdpClient) resendPdu(pdu PDU) error {
 		return err
 	}
 
-	_, e = client.conn.Write(send_bytes)
+	if client.is_listen_mode {
+		_, e = client.conn.WriteToUDP(send_bytes, &client.peer_addr)
+	} else {
+		_, e = client.conn.Write(send_bytes)
+	}
 	if nil != e {
 		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")
