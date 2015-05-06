@@ -355,7 +355,9 @@ func (client *UdpClient) fireTick() {
 				}
 				if e := cr.resend(client); nil != e {
 					client.DEBUG.Print(client.logCtx, "resend pdu failed, "+e.Error()+"\r\n"+cr.request.String())
-				}
+				} //else {
+				//	client.ERROR.Print(client.logCtx, "resend ok.")
+				//}
 
 				cr.resend_count++
 			}
@@ -396,7 +398,12 @@ func (client *UdpClient) executeRequest(request *clientRequest) {
 }
 
 func (client *UdpClient) Stats() interface{} {
-	return map[string]interface{}{"id": client.logCtx, "pendings_requests": len(client.pendings), "queue": len(client.client_c)}
+	return map[string]interface{}{"id": client.logCtx,
+		"pendings_requests": len(client.pendings),
+		"queue":             len(client.client_c),
+		"expired_interval":  client.expired_interval.String(),
+		"poll_interval":     client.poll_interval.String(),
+		"last_at":           client.lastAt.String()}
 }
 
 func (client *UdpClient) IsExpired() bool {
