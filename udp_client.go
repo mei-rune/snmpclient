@@ -31,12 +31,12 @@ var (
 
 	all_snmp_agents_by_listen = map[string]string{}
 
-	use_listen_mode = flag.Bool("use_listen_mode", false, "use listen mode.")
+	use_listen_mode = flag.Bool("use_listen_mode", true, "use listen mode.")
 )
 
 const (
-	PDU_MAX_RID int32 = 32767 ///< max request id to use
-	PDU_MIN_RID int32 = 1000  ///< min request id to use
+	PDU_MAX_RID int32 = 2147483647 ///< max request id to use
+	PDU_MIN_RID int32 = 1000       ///< min request id to use
 )
 
 func init() {
@@ -98,6 +98,7 @@ type clientRequest struct {
 	response     PDU
 	e            SnmpError
 	cb           func(pdu PDU, e SnmpError)
+	cancel       int32
 }
 
 func (cr *clientRequest) resend(client *UdpClient) error {
@@ -145,9 +146,10 @@ func newRequest() *clientRequest {
 	requests_mutex.Unlock()
 	if nil != cached {
 		cached.timestamp = time.Now().Unix()
+		cached.cancel = 0
 		return cached
 	}
-	return &clientRequest{c: make(chan *clientRequest, 1), timestamp: time.Now().Unix()}
+	return &clientRequest{c: make(chan *clientRequest, 1), timestamp: time.Now().Unix(), cancel: 0}
 }
 
 func releaseRequest(will_cache *clientRequest) {
@@ -343,6 +345,11 @@ func (client *UdpClient) fireTick() {
 		now_seconds := now.Unix()
 		deleted := client.cached_deleted[0:0]
 		for id, cr := range client.pendings {
+			if 0 != atomic.LoadInt32(&cr.cancel) {
+				deleted = append(deleted, id)
+				continue
+			}
+
 			t := now_seconds - cr.timestamp
 			if t > int64(cr.timeout.Seconds()) {
 				deleted = append(deleted, id)
@@ -461,6 +468,7 @@ func (client *UdpClient) SendAndRecvWithSelect(request PDU, timeout time.Duratio
 	cr := newRequest()
 	cr.request = request
 	cr.timeout = timeout
+	cr.cancel = 0
 
 	timer := time.NewTimer(timeout)
 	select {
@@ -480,6 +488,7 @@ func (client *UdpClient) SendAndRecvWithSelect(request PDU, timeout time.Duratio
 		}
 		return response, e
 	case <-timer.C:
+		atomic.StoreInt32(&cr.cancel, 1)
 		return nil, TimeoutError
 	}
 }
@@ -922,7 +931,11 @@ func (client *UdpClient) resendPdu(pdu PDU) error {
 		return err
 	}
 
-	_, e = client.conn.Write(send_bytes)
+	if client.is_listen_mode {
+		_, e = client.conn.WriteToUDP(send_bytes, &client.peer_addr)
+	} else {
+		_, e = client.conn.Write(send_bytes)
+	}
 	if nil != e {
 		client.disconnect()
 		err = newError(SNMP_CODE_BADNET, e, "send pdu failed")

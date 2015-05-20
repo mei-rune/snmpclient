@@ -568,7 +568,7 @@ asn_get_objid_raw(asn_buf_t *b, asn_len_t len, asn_oid_t *oid)
 	}
 	oid->len = 0;
 	if (len == 0) {
-		asn_error(b, "short OBJID");
+		// asn_error(b, "short OBJID");
 		oid->subs[oid->len++] = 0;
 		oid->subs[oid->len++] = 0;
 		return (ASN_ERR_BADLEN);
