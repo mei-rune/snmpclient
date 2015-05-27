@@ -206,6 +206,24 @@ func (s *SnmpOid) Concat(i ...int) SnmpOid {
 	return SnmpOid(result)
 }
 
+func (s SnmpOid) ConcatOid(oid SnmpOid) SnmpOid {
+	result := make([]uint32, len(s), len(s)+len(oid))
+	copy(result, s)
+	for _, a := range oid {
+		result = append(result, a)
+	}
+	return SnmpOid(result)
+}
+
+func (s SnmpOid) ConcatString(oid_str string) SnmpOid {
+	oid, e := ParseOidFromString(oid_str)
+	if nil != e {
+		panic(e)
+	}
+
+	return s.ConcatOid(oid)
+}
+
 var number2bytes [][]byte
 var number2string []string
 
@@ -261,9 +279,9 @@ func NewOid(subs []uint32) *SnmpOid {
 
 func ParseOidFromString(s string) (SnmpOid, error) {
 	result := make([]uint32, 0, 20)
-	ss := strings.Split(s, ".")
+	ss := strings.Split(strings.Trim(s, "."), ".")
 	if 2 > len(ss) {
-		ss = strings.Split(s, "_")
+		ss = strings.Split(strings.Trim(s, "_"), "_")
 	}
 	for idx, v := range ss {
 		if 0 == len(v) {
