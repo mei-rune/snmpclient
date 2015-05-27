@@ -207,21 +207,18 @@ func (s *SnmpOid) Concat(i ...int) SnmpOid {
 }
 
 func (s SnmpOid) ConcatOid(oid SnmpOid) SnmpOid {
-	result := make([]uint32, len(s), len(s)+len(oid))
+	result := make([]uint32, len(s)+len(oid))
 	copy(result, s)
-	for _, a := range oid {
-		result = append(result, a)
-	}
+	copy(result[len(s):], oid)
 	return SnmpOid(result)
 }
 
-func (s SnmpOid) ConcatString(oid_str string) SnmpOid {
-	oid, e := ParseOidFromString(oid_str)
+func (s SnmpOid) ConcatString(oid string) SnmpOid {
+	o, e := ParseOidFromString(oid)
 	if nil != e {
 		panic(e)
 	}
-
-	return s.ConcatOid(oid)
+	return s.ConcatOid(o)
 }
 
 var number2bytes [][]byte
