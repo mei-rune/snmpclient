@@ -276,9 +276,9 @@ func NewOid(subs []uint32) *SnmpOid {
 
 func ParseOidFromString(s string) (SnmpOid, error) {
 	result := make([]uint32, 0, 20)
-	ss := strings.Split(s, ".")
+	ss := strings.Split(strings.Trim(s, "."), ".")
 	if 2 > len(ss) {
-		ss = strings.Split(s, "_")
+		ss = strings.Split(strings.Trim(s, "_"), "_")
 	}
 	for idx, v := range ss {
 		if 0 == len(v) {
