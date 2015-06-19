@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -165,6 +166,18 @@ func (self *UdpServer) ReturnErrorIfOidNotExists(status bool) *UdpServer {
 
 func (self *UdpServer) ReloadMibsFromString(mibs string) error {
 	self.mibs = NewMibTree()
+	return self.LoadMibsFromString(mibs)
+}
+
+func (self *UdpServer) LoadFile(file string) error {
+	mibs, e := ioutil.ReadFile(file)
+	if nil != e {
+		return e
+	}
+	return self.LoadMibsFromString(string(mibs))
+}
+
+func (self *UdpServer) LoadMibsFromString(mibs string) error {
 	if e := Read(bytes.NewReader([]byte(mibs)), func(oid SnmpOid, value SnmpValue) error {
 		if ok := self.mibs.Insert(&OidAndValue{Oid: oid,
 			Value: value}); !ok {
