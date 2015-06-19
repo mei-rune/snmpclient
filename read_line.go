@@ -31,6 +31,12 @@ func ParseString(ss []string, is_end bool, vs string) (SnmpValue, []string, erro
 	for idx, sss := range ss[1:] {
 		if re.MatchString(sss) {
 			p = idx
+			break
+		} else if strings.HasPrefix(sss, "#") ||
+			strings.Contains(sss, "MIB search path") ||
+			strings.Contains(sss, "Cannot find module") {
+			p = idx
+			break
 		}
 	}
 
@@ -70,6 +76,7 @@ func ParseString(ss []string, is_end bool, vs string) (SnmpValue, []string, erro
 func ReadHex(buf *bytes.Buffer, s string) error {
 	for _, h := range strings.Fields(strings.TrimSpace(s)) {
 		if 2 != len(h) {
+			panic("")
 			return errors.New("decode \"" + s + "\" failed, 'len of " + h + "' is not equals 2.")
 		}
 
@@ -87,6 +94,12 @@ func ParseHexString(ss []string, is_end bool, vs string) (SnmpValue, []string, e
 	for idx, sss := range ss[1:] {
 		if re.MatchString(sss) {
 			p = idx
+			break
+		} else if strings.HasPrefix(sss, "#") ||
+			strings.Contains(sss, "MIB search path") ||
+			strings.Contains(sss, "Cannot find module") {
+			p = idx
+			break
 		}
 	}
 
@@ -112,6 +125,9 @@ func ParseHexString(ss []string, is_end bool, vs string) (SnmpValue, []string, e
 		return nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, " + e.Error())
 	}
 	for _, s := range ss[1:p] {
+		if strings.HasPrefix(s, "#") {
+			return NewSnmpOctetString(buf.Bytes()), ss[p:], nil
+		}
 		if e := ReadHex(&buf, s); nil != e {
 			return nil, nil, errors.New("parse `" + strings.Join(ss, "\r\n") + "` failed, " + e.Error())
 		}
